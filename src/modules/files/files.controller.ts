@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Post, Query, Req, Res } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Query,
+  Req,
+  Res,
+} from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiCreatedResponse,
@@ -14,6 +23,7 @@ import type { Request, Response } from 'express';
 import { CreateDownloadLinkResponseDto } from './dto/create-download-link-response.dto';
 import { CreateDownloadLinkDto } from './dto/create-download-link.dto';
 import { DownloadFileQueryDto } from './dto/download-file-query.dto';
+import { FileMetadataResponseDto } from './dto/file-metadata-response.dto';
 import { UploadFileResponseDto } from './dto/upload-file-response.dto';
 import { UploadFileDto } from './dto/upload-file.dto';
 import { FilesService } from './files.service';
@@ -33,8 +43,14 @@ export class FilesController {
     const uploaded = await this.filesService.uploadBase64File({
       fileName: body.fileName,
       contentBase64: body.contentBase64,
-      contentType: body.contentType ?? 'application/octet-stream',
+      contentType: body.contentType,
       organizationId: body.organizationId,
+      requestId: body.requestId,
+      submissionId: body.submissionId,
+      submissionItemId: body.submissionItemId,
+      uploadedByType: body.uploadedByType,
+      uploadedById: body.uploadedById,
+      metadata: body.metadata,
     });
 
     return {
@@ -44,6 +60,40 @@ export class FilesController {
           uploaded.storageKey,
           this.resolveBaseUrl(req),
         ),
+      },
+    };
+  }
+
+  @ApiOperation({ summary: 'Get persisted metadata for an uploaded file.' })
+  @ApiOkResponse({ type: FileMetadataResponseDto })
+  @ApiNotFoundResponse({ description: 'File metadata not found.' })
+  @Get('metadata/:id')
+  async getFileMetadata(@Param('id') fileId: string, @Req() req: Request) {
+    const fileMetadata = await this.filesService.getFileMetadata(fileId);
+
+    return {
+      data: {
+        id: fileMetadata.id,
+        organizationId: fileMetadata.organizationId,
+        requestId: fileMetadata.requestId,
+        submissionId: fileMetadata.submissionId,
+        submissionItemId: fileMetadata.submissionItemId,
+        originalFileName: fileMetadata.originalFileName,
+        normalizedFileName: fileMetadata.normalizedFileName,
+        extension: fileMetadata.extension,
+        declaredMimeType: fileMetadata.declaredMimeType,
+        detectedMimeType: fileMetadata.detectedMimeType,
+        sizeBytes: fileMetadata.sizeBytes,
+        checksumSha256: fileMetadata.checksumSha256,
+        storageKey: fileMetadata.storageKey,
+        storageDriver: fileMetadata.storageDriver,
+        publicUrl: this.filesService.getPublicFileUrl(fileMetadata.storageKey),
+        downloadUrl: this.filesService.createDownloadLink(
+          fileMetadata.storageKey,
+          this.resolveBaseUrl(req),
+        ),
+        status: fileMetadata.status,
+        createdAt: fileMetadata.createdAt.toISOString(),
       },
     };
   }

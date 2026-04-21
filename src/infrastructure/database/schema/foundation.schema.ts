@@ -145,6 +145,11 @@ export const portalLinkStatusEnum = pgEnum('portal_link_status', [
   'expired',
 ]);
 
+export const fileAssetStatusEnum = pgEnum('file_asset_status', [
+  'active',
+  'deleted',
+]);
+
 export const organizations = pgTable(
   'organizations',
   {
@@ -746,6 +751,60 @@ export const answers = pgTable(
   },
   (table) => [
     uniqueIndex('answers_submission_item_key').on(table.submissionItemId),
+  ],
+);
+
+export const fileAssets = pgTable(
+  'file_assets',
+  {
+    id: text('id').primaryKey(),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    requestId: text('request_id').references(() => requests.id, {
+      onDelete: 'set null',
+    }),
+    submissionId: text('submission_id').references(() => submissions.id, {
+      onDelete: 'set null',
+    }),
+    submissionItemId: text('submission_item_id').references(
+      () => submissionItems.id,
+      {
+        onDelete: 'set null',
+      },
+    ),
+    storageKey: varchar('storage_key', { length: 320 }).notNull(),
+    storageDriver: varchar('storage_driver', { length: 16 }).notNull(),
+    originalFileName: varchar('original_file_name', { length: 255 }).notNull(),
+    normalizedFileName: varchar('normalized_file_name', {
+      length: 255,
+    }).notNull(),
+    extension: varchar('extension', { length: 16 }),
+    declaredMimeType: varchar('declared_mime_type', { length: 255 }),
+    detectedMimeType: varchar('detected_mime_type', { length: 255 }).notNull(),
+    sizeBytes: integer('size_bytes').notNull(),
+    checksumSha256: varchar('checksum_sha256', { length: 64 }).notNull(),
+    status: fileAssetStatusEnum('status').notNull().default('active'),
+    uploadedByType: varchar('uploaded_by_type', { length: 32 })
+      .notNull()
+      .default('unknown'),
+    uploadedById: text('uploaded_by_id'),
+    metadata: jsonb('metadata')
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex('file_assets_storage_key_key').on(table.storageKey),
+    index('file_assets_org_created_idx').on(
+      table.organizationId,
+      table.createdAt,
+    ),
+    index('file_assets_submission_item_idx').on(table.submissionItemId),
   ],
 );
 

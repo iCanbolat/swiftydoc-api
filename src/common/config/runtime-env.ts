@@ -36,6 +36,13 @@ export const runtimeEnvSchema = z
     RATE_LIMIT_TTL_MS: numberFromEnv.default(60000),
     RATE_LIMIT_MAX: numberFromEnv.default(120),
     WEBHOOK_DELIVERY_TIMEOUT_MS: numberFromEnv.default(5000),
+    FILE_UPLOAD_MAX_BYTES: numberFromEnv.default(10485760),
+    FILE_UPLOAD_ALLOWED_MIME_TYPES: z
+      .string()
+      .min(1)
+      .default(
+        'application/pdf,image/jpeg,image/png,image/webp,text/plain,text/csv,application/zip,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      ),
     STORAGE_DRIVER: z.enum(['local', 'bunny']).default('local'),
     LOCAL_STORAGE_PATH: z.string().min(1).default('./storage'),
     BUNNY_STORAGE_ZONE: z.string().min(1).optional(),
