@@ -94,6 +94,21 @@ describe('AppController (e2e)', () => {
       .expect(400);
   });
 
+  it('/v1/exports/jobs (POST) rejects invalid dto payload', () => {
+    return request(app.getHttpServer())
+      .post('/v1/exports/jobs')
+      .send({
+        organizationId: 'org_123',
+      })
+      .expect(400);
+  });
+
+  it('/v1/exports/jobs/:id (GET) rejects missing query payload', () => {
+    return request(app.getHttpServer())
+      .get('/v1/exports/jobs/export_job_123')
+      .expect(400);
+  });
+
   it('/docs-json (GET) exposes typed webhook enums in the OpenAPI document', () => {
     return request(app.getHttpServer())
       .get('/docs-json')
@@ -107,6 +122,8 @@ describe('AppController (e2e)', () => {
         expect(body.paths['/v1/reviews/{itemId}/approve']).toBeDefined();
         expect(body.paths['/v1/reviews/{itemId}/reject']).toBeDefined();
         expect(body.paths['/v1/reviews/{itemId}/comments']).toBeDefined();
+        expect(body.paths['/v1/exports/jobs']).toBeDefined();
+        expect(body.paths['/v1/exports/jobs/{id}']).toBeDefined();
 
         const eventTypeEnum =
           body.components.schemas.EmitWebhookEventDto.properties.eventType
@@ -130,14 +147,25 @@ describe('AppController (e2e)', () => {
         const commentAuthorTypeEnum =
           body.components.schemas.CreateSubmissionItemCommentDto.properties
             .authorType.enum ?? body.components.schemas.CommentAuthorType?.enum;
+        const exportTypeEnum =
+          body.components.schemas.CreateExportJobDto.properties.exportType
+            .enum ?? body.components.schemas.ExportJobType?.enum;
+        const exportStatusEnum =
+          body.components.schemas.ExportJobResponseDataDto.properties.status
+            .enum ?? body.components.schemas.ExportJobStatus?.enum;
 
         expect(eventTypeEnum).toContain('file.uploaded');
+        expect(eventTypeEnum).toContain('request.viewed');
+        expect(eventTypeEnum).toContain('request.completed');
+        expect(eventTypeEnum).toContain('request.overdue');
         expect(subscribedEventsEnum).toContain('*');
         expect(requestStatusEnum).toContain('closed');
         expect(portalPurposeEnum).toContain('request_access');
         expect(submissionStatusEnum).toContain('completed');
         expect(reviewDecisionEnum).toContain('approved');
         expect(commentAuthorTypeEnum).toContain('reviewer');
+        expect(exportTypeEnum).toContain('zip');
+        expect(exportStatusEnum).toContain('processing');
       });
   });
 

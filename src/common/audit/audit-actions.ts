@@ -3,6 +3,9 @@ type ValueOf<T> = T[keyof T];
 export const AUDIT_ACTIONS = {
   security: {},
   data_access: {
+    exportJobCompleted: 'data_access.export_job_completed',
+    exportJobFailed: 'data_access.export_job_failed',
+    exportJobQueued: 'data_access.export_job_queued',
     fileUploaded: 'data_access.file_uploaded',
     commentCreated: 'data_access.comment_created',
     portalLinkCreated: 'data_access.portal_link_created',

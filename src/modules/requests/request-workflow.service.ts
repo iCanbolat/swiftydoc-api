@@ -276,6 +276,8 @@ export class RequestWorkflowService {
             : action === 'reopen'
               ? null
               : requestRow.closedAt,
+        overdueNotifiedAt:
+          action === 'reopen' ? null : requestRow.overdueNotifiedAt,
         updatedAt: now,
       })
       .where(eq(requests.id, requestId));
@@ -312,6 +314,14 @@ export class RequestWorkflowService {
           workspaceId: requestRow.workspaceId,
         },
         input.organizationId,
+      );
+    }
+
+    if (action === 'send' || action === 'reopen') {
+      await this.syncRequestLifecycleSignals(
+        requestId,
+        input.organizationId,
+        now,
       );
     }
 
@@ -515,6 +525,17 @@ export class RequestWorkflowService {
         consume,
       },
     });
+
+    await this.webhookService.emitEvent(
+      WEBHOOK_EVENTS.requests.viewed,
+      {
+        requestId: portalLink.requestId,
+        submissionId: portalLink.submissionId,
+        recipientId: portalLink.recipientId,
+        portalLinkId: portalLink.id,
+      },
+      portalLink.organizationId,
+    );
 
     return {
       portalLinkId: portalLink.id,
@@ -730,6 +751,12 @@ export class RequestWorkflowService {
       input.organizationId,
     );
 
+    await this.syncRequestLifecycleSignals(
+      submission.requestId,
+      input.organizationId,
+      now,
+    );
+
     return {
       submissionId,
       status: submissionProgress.status,
@@ -830,6 +857,12 @@ export class RequestWorkflowService {
         progressPercent: submissionProgress.progressPercent,
       },
       input.organizationId,
+    );
+
+    await this.syncRequestLifecycleSignals(
+      submissionItem.requestId,
+      input.organizationId,
+      now,
     );
 
     return {
@@ -939,6 +972,123 @@ export class RequestWorkflowService {
       totalItems,
       completedItems,
     };
+  }
+
+  private async syncRequestLifecycleSignals(
+    requestId: string,
+    organizationId: string,
+    now: Date,
+  ): Promise<void> {
+    const db = this.getDatabase();
+
+    const [requestRow] = await db
+      .select({
+        id: requests.id,
+        requestCode: requests.requestCode,
+        status: requests.status,
+        dueAt: requests.dueAt,
+        overdueNotifiedAt: requests.overdueNotifiedAt,
+        workspaceId: requests.workspaceId,
+      })
+      .from(requests)
+      .where(
+        and(
+          eq(requests.id, requestId),
+          eq(requests.organizationId, organizationId),
+        ),
+      )
+      .limit(1);
+
+    if (!requestRow) {
+      return;
+    }
+
+    const [totalSubmissionsRow] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(submissions)
+      .where(eq(submissions.requestId, requestId));
+
+    const [completedSubmissionsRow] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(submissions)
+      .where(
+        and(
+          eq(submissions.requestId, requestId),
+          eq(submissions.status, 'completed'),
+        ),
+      );
+
+    const totalSubmissions = Number(totalSubmissionsRow?.count ?? 0);
+    const completedSubmissions = Number(completedSubmissionsRow?.count ?? 0);
+    const allSubmissionsCompleted =
+      totalSubmissions > 0 && completedSubmissions === totalSubmissions;
+
+    let nextStatus = requestRow.status;
+
+    if (requestRow.status !== 'closed' && requestRow.status !== 'cancelled') {
+      if (allSubmissionsCompleted) {
+        nextStatus = 'completed';
+      } else if (requestRow.status === 'completed') {
+        nextStatus = 'in_progress';
+      }
+    }
+
+    const shouldEmitCompleted =
+      requestRow.status !== 'completed' && nextStatus === 'completed';
+
+    const shouldEmitOverdue =
+      requestRow.dueAt !== null &&
+      requestRow.dueAt.getTime() < now.getTime() &&
+      requestRow.overdueNotifiedAt === null &&
+      !['completed', 'closed', 'cancelled'].includes(nextStatus);
+
+    const updateValues: {
+      overdueNotifiedAt?: Date | null;
+      status?: RequestStatus;
+      updatedAt?: Date;
+    } = {};
+
+    if (nextStatus !== requestRow.status) {
+      updateValues.status = nextStatus;
+      updateValues.updatedAt = now;
+    }
+
+    if (shouldEmitOverdue) {
+      updateValues.overdueNotifiedAt = now;
+      updateValues.updatedAt = now;
+    }
+
+    if (Object.keys(updateValues).length > 0) {
+      await db.update(requests).set(updateValues).where(eq(requests.id, requestId));
+    }
+
+    if (shouldEmitCompleted) {
+      await this.webhookService.emitEvent(
+        WEBHOOK_EVENTS.requests.completed,
+        {
+          requestId,
+          requestCode: requestRow.requestCode,
+          status: nextStatus,
+          workspaceId: requestRow.workspaceId,
+          totalSubmissions,
+          completedSubmissions,
+        },
+        organizationId,
+      );
+    }
+
+    if (shouldEmitOverdue) {
+      await this.webhookService.emitEvent(
+        WEBHOOK_EVENTS.requests.overdue,
+        {
+          requestId,
+          requestCode: requestRow.requestCode,
+          status: nextStatus,
+          dueAt: requestRow.dueAt?.toISOString() ?? null,
+        },
+        organizationId,
+      );
+    }
   }
 
   private getDatabase() {

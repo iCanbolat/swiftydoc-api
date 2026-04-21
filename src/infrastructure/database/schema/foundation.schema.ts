@@ -156,6 +156,19 @@ export const commentAuthorTypeEnum = pgEnum('comment_author_type', [
   'system',
 ]);
 
+export const exportJobTypeEnum = pgEnum('export_job_type', [
+  'zip',
+  'pdf_summary',
+  'csv_metadata',
+]);
+
+export const exportJobStatusEnum = pgEnum('export_job_status', [
+  'queued',
+  'processing',
+  'completed',
+  'failed',
+]);
+
 export const fileAssetStatusEnum = pgEnum('file_asset_status', [
   'active',
   'deleted',
@@ -606,6 +619,9 @@ export const requests = pgTable(
     dueAt: timestamp('due_at', { withTimezone: true }),
     sentAt: timestamp('sent_at', { withTimezone: true }),
     closedAt: timestamp('closed_at', { withTimezone: true }),
+    overdueNotifiedAt: timestamp('overdue_notified_at', {
+      withTimezone: true,
+    }),
     createdByUserId: text('created_by_user_id').references(() => users.id, {
       onDelete: 'set null',
     }),
@@ -834,6 +850,44 @@ export const comments = pgTable(
       table.submissionItemId,
       table.createdAt,
     ),
+  ],
+);
+
+export const exportJobs = pgTable(
+  'export_jobs',
+  {
+    id: text('id').primaryKey(),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    requestId: text('request_id').references(() => requests.id, {
+      onDelete: 'set null',
+    }),
+    submissionId: text('submission_id').references(() => submissions.id, {
+      onDelete: 'set null',
+    }),
+    type: exportJobTypeEnum('type').notNull(),
+    status: exportJobStatusEnum('status').notNull().default('queued'),
+    artifactStorageKey: varchar('artifact_storage_key', { length: 320 }),
+    artifactMimeType: varchar('artifact_mime_type', { length: 255 }),
+    artifactSizeBytes: integer('artifact_size_bytes'),
+    requestedByUserId: text('requested_by_user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    errorMessage: text('error_message'),
+    metadata: jsonb('metadata')
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    startedAt: timestamp('started_at', { withTimezone: true }),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+  },
+  (table) => [
+    index('export_jobs_org_created_idx').on(table.organizationId, table.createdAt),
+    index('export_jobs_request_status_idx').on(table.requestId, table.status),
   ],
 );
 
