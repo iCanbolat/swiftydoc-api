@@ -145,6 +145,17 @@ export const portalLinkStatusEnum = pgEnum('portal_link_status', [
   'expired',
 ]);
 
+export const reviewDecisionTypeEnum = pgEnum('review_decision_type', [
+  'approved',
+  'rejected',
+]);
+
+export const commentAuthorTypeEnum = pgEnum('comment_author_type', [
+  'reviewer',
+  'recipient',
+  'system',
+]);
+
 export const fileAssetStatusEnum = pgEnum('file_asset_status', [
   'active',
   'deleted',
@@ -751,6 +762,75 @@ export const answers = pgTable(
   },
   (table) => [
     uniqueIndex('answers_submission_item_key').on(table.submissionItemId),
+  ],
+);
+
+export const reviewDecisions = pgTable(
+  'review_decisions',
+  {
+    id: text('id').primaryKey(),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    requestId: text('request_id').references(() => requests.id, {
+      onDelete: 'set null',
+    }),
+    submissionId: text('submission_id').references(() => submissions.id, {
+      onDelete: 'set null',
+    }),
+    submissionItemId: text('submission_item_id')
+      .notNull()
+      .references(() => submissionItems.id, { onDelete: 'cascade' }),
+    decision: reviewDecisionTypeEnum('decision').notNull(),
+    reviewerId: text('reviewer_id'),
+    note: text('note'),
+    metadata: jsonb('metadata')
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index('review_decisions_item_created_idx').on(
+      table.submissionItemId,
+      table.createdAt,
+    ),
+  ],
+);
+
+export const comments = pgTable(
+  'comments',
+  {
+    id: text('id').primaryKey(),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    requestId: text('request_id').references(() => requests.id, {
+      onDelete: 'set null',
+    }),
+    submissionId: text('submission_id').references(() => submissions.id, {
+      onDelete: 'set null',
+    }),
+    submissionItemId: text('submission_item_id')
+      .notNull()
+      .references(() => submissionItems.id, { onDelete: 'cascade' }),
+    authorType: commentAuthorTypeEnum('author_type')
+      .notNull()
+      .default('reviewer'),
+    authorId: text('author_id'),
+    body: text('body').notNull(),
+    metadata: jsonb('metadata')
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index('comments_item_created_idx').on(table.submissionItemId, table.createdAt),
   ],
 );
 

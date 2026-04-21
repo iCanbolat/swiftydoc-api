@@ -17,6 +17,7 @@ import {
 import {
   type RequestStatus,
   type RequestTransitionAction,
+  type SubmissionItemStatus,
   type SubmissionStatus,
 } from '../../common/requests/request-workflow';
 import { WEBHOOK_EVENTS } from '../../common/webhooks/webhook-events';
@@ -24,8 +25,10 @@ import { AuditLogService } from '../../infrastructure/audit/audit-log.service';
 import { DatabaseService } from '../../infrastructure/database/database.service';
 import {
   answers,
+  comments,
   portalLinks,
   requests,
+  reviewDecisions,
   submissionItems,
   submissions,
   templateFields,
@@ -46,6 +49,10 @@ const PORTAL_DEFAULT_EXPIRES_IN_MINUTES = 60 * 24 * 7;
 type AnswerActorType = 'recipient' | 'reviewer' | 'system';
 
 type AnswerSource = 'portal' | 'api';
+
+type ReviewDecisionType = 'approved' | 'rejected';
+
+type CommentAuthorType = 'reviewer' | 'recipient' | 'system';
 
 export interface CreateRequestInput {
   organizationId: string;
@@ -96,6 +103,21 @@ export interface AutosaveSubmissionInput {
   answeredByType: AnswerActorType;
   answeredById?: string;
   source: AnswerSource;
+}
+
+export interface ReviewSubmissionItemInput {
+  organizationId: string;
+  reviewerId?: string;
+  note?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface CreateSubmissionItemCommentInput {
+  organizationId: string;
+  body: string;
+  authorType: CommentAuthorType;
+  authorId?: string;
+  metadata?: Record<string, unknown>;
 }
 
 @Injectable()
@@ -508,6 +530,85 @@ export class RequestWorkflowService {
     };
   }
 
+  async approveSubmissionItem(itemId: string, input: ReviewSubmissionItemInput) {
+    return this.reviewSubmissionItem(itemId, 'approved', input);
+  }
+
+  async rejectSubmissionItem(itemId: string, input: ReviewSubmissionItemInput) {
+    return this.reviewSubmissionItem(itemId, 'rejected', input);
+  }
+
+  async createSubmissionItemComment(
+    itemId: string,
+    input: CreateSubmissionItemCommentInput,
+  ) {
+    const db = this.getDatabase();
+    const now = new Date();
+    const normalizedBody = input.body.trim();
+
+    if (normalizedBody.length === 0) {
+      throw new BadRequestException('Comment body cannot be empty.');
+    }
+
+    const submissionItem = await this.getSubmissionItemContext(
+      itemId,
+      input.organizationId,
+    );
+
+    const commentId = randomUUID();
+
+    await db.insert(comments).values({
+      id: commentId,
+      organizationId: input.organizationId,
+      requestId: submissionItem.requestId,
+      submissionId: submissionItem.submissionId,
+      submissionItemId: itemId,
+      authorType: input.authorType,
+      authorId: input.authorId,
+      body: normalizedBody,
+      metadata: input.metadata ?? {},
+      createdAt: now,
+    });
+
+    await this.auditLogService.record({
+      category: 'data_access',
+      action: AUDIT_ACTIONS.data_access.commentCreated,
+      organizationId: input.organizationId,
+      actorType: input.authorType,
+      actorId: input.authorId,
+      resourceType: RESOURCE_TYPES.documents.comment,
+      resourceId: commentId,
+      metadata: {
+        requestId: submissionItem.requestId,
+        submissionId: submissionItem.submissionId,
+        submissionItemId: itemId,
+      },
+    });
+
+    await this.webhookService.emitEvent(
+      WEBHOOK_EVENTS.comments.created,
+      {
+        commentId,
+        requestId: submissionItem.requestId,
+        submissionId: submissionItem.submissionId,
+        submissionItemId: itemId,
+        authorType: input.authorType,
+      },
+      input.organizationId,
+    );
+
+    return {
+      id: commentId,
+      submissionItemId: itemId,
+      submissionId: submissionItem.submissionId,
+      requestId: submissionItem.requestId,
+      authorType: input.authorType,
+      authorId: input.authorId ?? null,
+      body: normalizedBody,
+      createdAt: now.toISOString(),
+    };
+  }
+
   async autosaveSubmissionAnswers(
     submissionId: string,
     input: AutosaveSubmissionInput,
@@ -594,6 +695,192 @@ export class RequestWorkflowService {
         ),
       );
 
+    const submissionProgress = await this.recalculateSubmissionProgress(
+      submissionId,
+      submission.status,
+      now,
+    );
+
+    await this.auditLogService.record({
+      category: 'data_access',
+      action: AUDIT_ACTIONS.data_access.submissionAutosaved,
+      organizationId: input.organizationId,
+      actorType: input.answeredByType,
+      actorId: input.answeredById,
+      resourceType: RESOURCE_TYPES.documents.submission,
+      resourceId: submissionId,
+      metadata: {
+        answeredItems: distinctItemIds.length,
+        progressPercent: submissionProgress.progressPercent,
+        submissionStatus: submissionProgress.status,
+      },
+    });
+
+    await this.webhookService.emitEvent(
+      WEBHOOK_EVENTS.submissions.updated,
+      {
+        submissionId,
+        requestId: submission.requestId,
+        progressPercent: submissionProgress.progressPercent,
+        status: submissionProgress.status,
+      },
+      input.organizationId,
+    );
+
+    return {
+      submissionId,
+      status: submissionProgress.status,
+      progressPercent: submissionProgress.progressPercent,
+      answeredItems: distinctItemIds.length,
+      totalItems: submissionProgress.totalItems,
+      completedItems: submissionProgress.completedItems,
+      updatedAt: now.toISOString(),
+    };
+  }
+
+  private async reviewSubmissionItem(
+    itemId: string,
+    decision: ReviewDecisionType,
+    input: ReviewSubmissionItemInput,
+  ) {
+    const db = this.getDatabase();
+    const now = new Date();
+    const normalizedNote = input.note?.trim() || null;
+
+    if (decision === 'rejected' && !normalizedNote) {
+      throw new BadRequestException('Reject flow requires a note.');
+    }
+
+    const submissionItem = await this.getSubmissionItemContext(
+      itemId,
+      input.organizationId,
+    );
+
+    this.assertReviewTransitionAllowed(submissionItem.status, decision);
+
+    const nextItemStatus: SubmissionItemStatus =
+      decision === 'approved' ? 'approved' : 'rejected';
+
+    await db
+      .update(submissionItems)
+      .set({
+        status: nextItemStatus,
+        note: normalizedNote ?? submissionItem.note,
+        updatedAt: now,
+      })
+      .where(eq(submissionItems.id, itemId));
+
+    const reviewDecisionId = randomUUID();
+
+    await db.insert(reviewDecisions).values({
+      id: reviewDecisionId,
+      organizationId: input.organizationId,
+      requestId: submissionItem.requestId,
+      submissionId: submissionItem.submissionId,
+      submissionItemId: itemId,
+      decision,
+      reviewerId: input.reviewerId,
+      note: normalizedNote,
+      metadata: input.metadata ?? {},
+      createdAt: now,
+    });
+
+    const submissionProgress = await this.recalculateSubmissionProgress(
+      submissionItem.submissionId,
+      submissionItem.submissionStatus,
+      now,
+    );
+
+    await this.auditLogService.record({
+      category: 'data_access',
+      action:
+        decision === 'approved'
+          ? AUDIT_ACTIONS.data_access.submissionItemApproved
+          : AUDIT_ACTIONS.data_access.submissionItemRejected,
+      organizationId: input.organizationId,
+      actorType: 'reviewer',
+      actorId: input.reviewerId,
+      resourceType: RESOURCE_TYPES.documents.reviewDecision,
+      resourceId: reviewDecisionId,
+      metadata: {
+        requestId: submissionItem.requestId,
+        submissionId: submissionItem.submissionId,
+        submissionItemId: itemId,
+        fromStatus: submissionItem.status,
+        toStatus: nextItemStatus,
+        submissionStatus: submissionProgress.status,
+        progressPercent: submissionProgress.progressPercent,
+      },
+    });
+
+    await this.webhookService.emitEvent(
+      decision === 'approved'
+        ? WEBHOOK_EVENTS.reviews.approved
+        : WEBHOOK_EVENTS.reviews.rejected,
+      {
+        reviewDecisionId,
+        requestId: submissionItem.requestId,
+        submissionId: submissionItem.submissionId,
+        submissionItemId: itemId,
+        status: nextItemStatus,
+        submissionStatus: submissionProgress.status,
+        progressPercent: submissionProgress.progressPercent,
+      },
+      input.organizationId,
+    );
+
+    return {
+      reviewDecisionId,
+      decision,
+      submissionItemId: itemId,
+      submissionId: submissionItem.submissionId,
+      requestId: submissionItem.requestId,
+      status: nextItemStatus,
+      note: normalizedNote ?? submissionItem.note,
+      reviewerId: input.reviewerId ?? null,
+      submissionStatus: submissionProgress.status,
+      progressPercent: submissionProgress.progressPercent,
+      reviewedAt: now.toISOString(),
+    };
+  }
+
+  private async getSubmissionItemContext(itemId: string, organizationId: string) {
+    const db = this.getDatabase();
+
+    const [submissionItem] = await db
+      .select({
+        id: submissionItems.id,
+        submissionId: submissionItems.submissionId,
+        status: submissionItems.status,
+        note: submissionItems.note,
+        requestId: submissions.requestId,
+        submissionStatus: submissions.status,
+      })
+      .from(submissionItems)
+      .innerJoin(submissions, eq(submissions.id, submissionItems.submissionId))
+      .where(
+        and(
+          eq(submissionItems.id, itemId),
+          eq(submissionItems.organizationId, organizationId),
+          eq(submissions.organizationId, organizationId),
+        ),
+      )
+      .limit(1);
+
+    if (!submissionItem) {
+      throw new NotFoundException('Submission item not found.');
+    }
+
+    return submissionItem;
+  }
+
+  private async recalculateSubmissionProgress(
+    submissionId: string,
+    previousStatus: SubmissionStatus,
+    now: Date,
+  ) {
+    const db = this.getDatabase();
+
     const [totalItemsRow] = await db
       .select({ count: sql<number>`count(*)` })
       .from(submissionItems)
@@ -623,9 +910,9 @@ export class RequestWorkflowService {
     const nextSubmissionStatus: SubmissionStatus =
       progressPercent === 100
         ? 'completed'
-        : submission.status === 'completed'
+        : previousStatus === 'completed'
           ? 'reopened'
-          : submission.status === 'reopened'
+          : previousStatus === 'reopened'
             ? 'reopened'
             : 'in_progress';
 
@@ -640,40 +927,11 @@ export class RequestWorkflowService {
       })
       .where(eq(submissions.id, submissionId));
 
-    await this.auditLogService.record({
-      category: 'data_access',
-      action: AUDIT_ACTIONS.data_access.submissionAutosaved,
-      organizationId: input.organizationId,
-      actorType: input.answeredByType,
-      actorId: input.answeredById,
-      resourceType: RESOURCE_TYPES.documents.submission,
-      resourceId: submissionId,
-      metadata: {
-        answeredItems: distinctItemIds.length,
-        progressPercent,
-        submissionStatus: nextSubmissionStatus,
-      },
-    });
-
-    await this.webhookService.emitEvent(
-      WEBHOOK_EVENTS.submissions.updated,
-      {
-        submissionId,
-        requestId: submission.requestId,
-        progressPercent,
-        status: nextSubmissionStatus,
-      },
-      input.organizationId,
-    );
-
     return {
-      submissionId,
       status: nextSubmissionStatus,
       progressPercent,
-      answeredItems: distinctItemIds.length,
       totalItems,
       completedItems,
-      updatedAt: now.toISOString(),
     };
   }
 
@@ -696,6 +954,22 @@ export class RequestWorkflowService {
 
   private hashToken(token: string): string {
     return createHash('sha256').update(token).digest('hex');
+  }
+
+  private assertReviewTransitionAllowed(
+    currentStatus: SubmissionItemStatus,
+    decision: ReviewDecisionType,
+  ) {
+    const allowedStatuses: Record<ReviewDecisionType, SubmissionItemStatus[]> = {
+      approved: ['provided', 'rejected', 'changes_requested', 'approved'],
+      rejected: ['provided', 'approved', 'changes_requested', 'rejected'],
+    };
+
+    if (!allowedStatuses[decision].includes(currentStatus)) {
+      throw new ConflictException(
+        `Cannot ${decision} submission item from status ${currentStatus}.`,
+      );
+    }
   }
 
   private assertTransitionAllowed(

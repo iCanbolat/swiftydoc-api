@@ -4,12 +4,15 @@ export const AUDIT_ACTIONS = {
   security: {},
   data_access: {
     fileUploaded: 'data_access.file_uploaded',
+    commentCreated: 'data_access.comment_created',
     portalLinkCreated: 'data_access.portal_link_created',
     portalLinkVerified: 'data_access.portal_link_verified',
     requestClosed: 'data_access.request_closed',
     requestCreated: 'data_access.request_created',
     requestReopened: 'data_access.request_reopened',
     requestSent: 'data_access.request_sent',
+    submissionItemApproved: 'data_access.submission_item_approved',
+    submissionItemRejected: 'data_access.submission_item_rejected',
     submissionAutosaved: 'data_access.submission_autosaved',
   },
   webhook: {
