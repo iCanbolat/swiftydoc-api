@@ -13,12 +13,18 @@ import { RequestWorkflowService } from './request-workflow.service';
 @ApiTags('Portal')
 @Controller('v1/portal')
 export class PortalController {
-  constructor(private readonly requestWorkflowService: RequestWorkflowService) {}
+  constructor(
+    private readonly requestWorkflowService: RequestWorkflowService,
+  ) {}
 
-  @ApiOperation({ summary: 'Verify and optionally consume a secure portal link.' })
+  @ApiOperation({
+    summary: 'Verify and optionally consume a secure portal link.',
+  })
   @ApiCreatedResponse({ type: VerifyPortalLinkResponseDto })
   @ApiBadRequestResponse({ description: 'DTO validation failed.' })
-  @ApiUnauthorizedResponse({ description: 'Portal link is invalid or expired.' })
+  @ApiUnauthorizedResponse({
+    description: 'Portal link is invalid or expired.',
+  })
   @Post('access')
   async verifyAccess(@Body() body: VerifyPortalLinkDto) {
     const portalAccess = await this.requestWorkflowService.verifyPortalLink({

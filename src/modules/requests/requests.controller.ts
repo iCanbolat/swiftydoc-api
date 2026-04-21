@@ -19,7 +19,9 @@ import { RequestWorkflowService } from './request-workflow.service';
 @ApiTags('Requests')
 @Controller('v1/requests')
 export class RequestsController {
-  constructor(private readonly requestWorkflowService: RequestWorkflowService) {}
+  constructor(
+    private readonly requestWorkflowService: RequestWorkflowService,
+  ) {}
 
   @ApiOperation({ summary: 'Create a draft request and optional submissions.' })
   @ApiCreatedResponse({ type: CreateRequestResponseDto })
@@ -48,10 +50,15 @@ export class RequestsController {
   @ApiOperation({ summary: 'Send a draft request.' })
   @ApiCreatedResponse({ type: TransitionRequestResponseDto })
   @ApiBadRequestResponse({ description: 'DTO validation failed.' })
-  @ApiConflictResponse({ description: 'Transition is not allowed for this status.' })
+  @ApiConflictResponse({
+    description: 'Transition is not allowed for this status.',
+  })
   @ApiNotFoundResponse({ description: 'Request not found.' })
   @Post(':id/send')
-  async sendRequest(@Param('id') requestId: string, @Body() body: TransitionRequestDto) {
+  async sendRequest(
+    @Param('id') requestId: string,
+    @Body() body: TransitionRequestDto,
+  ) {
     const request = await this.requestWorkflowService.transitionRequestStatus(
       requestId,
       'send',
@@ -70,7 +77,9 @@ export class RequestsController {
   @ApiOperation({ summary: 'Close a sent or in-progress request.' })
   @ApiCreatedResponse({ type: TransitionRequestResponseDto })
   @ApiBadRequestResponse({ description: 'DTO validation failed.' })
-  @ApiConflictResponse({ description: 'Transition is not allowed for this status.' })
+  @ApiConflictResponse({
+    description: 'Transition is not allowed for this status.',
+  })
   @ApiNotFoundResponse({ description: 'Request not found.' })
   @Post(':id/close')
   async closeRequest(
@@ -95,7 +104,9 @@ export class RequestsController {
   @ApiOperation({ summary: 'Reopen a closed request.' })
   @ApiCreatedResponse({ type: TransitionRequestResponseDto })
   @ApiBadRequestResponse({ description: 'DTO validation failed.' })
-  @ApiConflictResponse({ description: 'Transition is not allowed for this status.' })
+  @ApiConflictResponse({
+    description: 'Transition is not allowed for this status.',
+  })
   @ApiNotFoundResponse({ description: 'Request not found.' })
   @Post(':id/reopen')
   async reopenRequest(

@@ -13,7 +13,9 @@ import { RequestWorkflowService } from './request-workflow.service';
 @ApiTags('Submissions')
 @Controller('v1/submissions')
 export class SubmissionsController {
-  constructor(private readonly requestWorkflowService: RequestWorkflowService) {}
+  constructor(
+    private readonly requestWorkflowService: RequestWorkflowService,
+  ) {}
 
   @ApiOperation({
     summary: 'Autosave answers and recompute submission progress.',
@@ -27,13 +29,16 @@ export class SubmissionsController {
     @Body() body: AutosaveSubmissionAnswersDto,
   ) {
     const updatedSubmission =
-      await this.requestWorkflowService.autosaveSubmissionAnswers(submissionId, {
-        organizationId: body.organizationId,
-        answers: body.answers,
-        answeredByType: body.answeredByType ?? 'recipient',
-        answeredById: body.answeredById,
-        source: body.source ?? 'portal',
-      });
+      await this.requestWorkflowService.autosaveSubmissionAnswers(
+        submissionId,
+        {
+          organizationId: body.organizationId,
+          answers: body.answers,
+          answeredByType: body.answeredByType ?? 'recipient',
+          answeredById: body.answeredById,
+          source: body.source ?? 'portal',
+        },
+      );
 
     return {
       data: updatedSubmission,

@@ -134,7 +134,9 @@ export class RequestWorkflowService {
         ? await db
             .select({ id: templateFields.id })
             .from(templateFields)
-            .where(eq(templateFields.templateVersionId, input.templateVersionId))
+            .where(
+              eq(templateFields.templateVersionId, input.templateVersionId),
+            )
         : [];
 
     let createdSubmissionCount = 0;
@@ -246,7 +248,12 @@ export class RequestWorkflowService {
       .set({
         status: nextStatus,
         sentAt: action === 'send' ? now : requestRow.sentAt,
-        closedAt: action === 'close' ? now : action === 'reopen' ? null : requestRow.closedAt,
+        closedAt:
+          action === 'close'
+            ? now
+            : action === 'reopen'
+              ? null
+              : requestRow.closedAt,
         updatedAt: now,
       })
       .where(eq(requests.id, requestId));
@@ -312,13 +319,13 @@ export class RequestWorkflowService {
       sentAt:
         action === 'send'
           ? now.toISOString()
-          : requestRow.sentAt?.toISOString() ?? null,
+          : (requestRow.sentAt?.toISOString() ?? null),
       closedAt:
         action === 'close'
           ? now.toISOString()
           : action === 'reopen'
             ? null
-            : requestRow.closedAt?.toISOString() ?? null,
+            : (requestRow.closedAt?.toISOString() ?? null),
       updatedAt: now.toISOString(),
     };
   }
@@ -528,7 +535,9 @@ export class RequestWorkflowService {
       throw new NotFoundException('Submission not found.');
     }
 
-    const distinctItemIds = [...new Set(input.answers.map((item) => item.submissionItemId))];
+    const distinctItemIds = [
+      ...new Set(input.answers.map((item) => item.submissionItemId)),
+    ];
 
     const existingItems = await db
       .select({ id: submissionItems.id })
@@ -541,7 +550,9 @@ export class RequestWorkflowService {
       );
 
     if (existingItems.length !== distinctItemIds.length) {
-      throw new BadRequestException('One or more submission items are invalid.');
+      throw new BadRequestException(
+        'One or more submission items are invalid.',
+      );
     }
 
     await db
@@ -604,7 +615,10 @@ export class RequestWorkflowService {
     const progressPercent =
       totalItems === 0
         ? 0
-        : Math.max(0, Math.min(100, Math.round((completedItems * 100) / totalItems)));
+        : Math.max(
+            0,
+            Math.min(100, Math.round((completedItems * 100) / totalItems)),
+          );
 
     const nextSubmissionStatus: SubmissionStatus =
       progressPercent === 100

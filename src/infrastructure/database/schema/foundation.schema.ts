@@ -70,10 +70,7 @@ export const auditCategoryEnum = pgEnum('audit_category', [
   'system',
 ]);
 
-export const clientStatusEnum = pgEnum('client_status', [
-  'active',
-  'archived',
-]);
+export const clientStatusEnum = pgEnum('client_status', ['active', 'archived']);
 
 export const contactStatusEnum = pgEnum('contact_status', [
   'active',
@@ -85,11 +82,10 @@ export const recipientStatusEnum = pgEnum('recipient_status', [
   'disabled',
 ]);
 
-export const recipientDeliveryChannelEnum = pgEnum('recipient_delivery_channel', [
-  'email',
-  'whatsapp',
-  'sms',
-]);
+export const recipientDeliveryChannelEnum = pgEnum(
+  'recipient_delivery_channel',
+  ['email', 'whatsapp', 'sms'],
+);
 
 export const templateStatusEnum = pgEnum('template_status', [
   'draft',
@@ -371,7 +367,10 @@ export const clients = pgTable(
     archivedAt: timestamp('archived_at', { withTimezone: true }),
   },
   (table) => [
-    index('clients_org_workspace_idx').on(table.organizationId, table.workspaceId),
+    index('clients_org_workspace_idx').on(
+      table.organizationId,
+      table.workspaceId,
+    ),
     uniqueIndex('clients_workspace_external_ref_key').on(
       table.workspaceId,
       table.externalRef,
@@ -402,7 +401,10 @@ export const clientContacts = pgTable(
       .defaultNow(),
   },
   (table) => [
-    uniqueIndex('client_contacts_client_email_key').on(table.clientId, table.email),
+    uniqueIndex('client_contacts_client_email_key').on(
+      table.clientId,
+      table.email,
+    ),
   ],
 );
 
@@ -462,7 +464,10 @@ export const templates = pgTable(
     archivedAt: timestamp('archived_at', { withTimezone: true }),
   },
   (table) => [
-    uniqueIndex('templates_workspace_slug_key').on(table.workspaceId, table.slug),
+    uniqueIndex('templates_workspace_slug_key').on(
+      table.workspaceId,
+      table.slug,
+    ),
   ],
 );
 
@@ -596,7 +601,10 @@ export const requests = pgTable(
       .defaultNow(),
   },
   (table) => [
-    uniqueIndex('requests_org_code_key').on(table.organizationId, table.requestCode),
+    uniqueIndex('requests_org_code_key').on(
+      table.organizationId,
+      table.requestCode,
+    ),
     index('requests_workspace_status_idx').on(table.workspaceId, table.status),
   ],
 );
@@ -652,7 +660,9 @@ export const portalLinks = pgTable(
     recipientId: text('recipient_id').references(() => recipients.id, {
       onDelete: 'set null',
     }),
-    purpose: portalLinkPurposeEnum('purpose').notNull().default('request_access'),
+    purpose: portalLinkPurposeEnum('purpose')
+      .notNull()
+      .default('request_access'),
     tokenHash: varchar('token_hash', { length: 64 }).notNull(),
     status: portalLinkStatusEnum('status').notNull().default('active'),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),

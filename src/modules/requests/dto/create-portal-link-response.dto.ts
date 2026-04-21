@@ -41,8 +41,7 @@ export class CreatePortalLinkResponseDataDto {
   usedCount!: number;
 
   @ApiProperty({
-    example:
-      '49b977787e6a203ceb5cfd0f4a5222f049ef92d782f61115095c5d57f453ff70',
+    example: '49b977787e6a203ceb5cfd0f4a5222f049ef92d782f61115095c5d57f453ff70',
   })
   token!: string;
 
