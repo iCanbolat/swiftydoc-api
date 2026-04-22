@@ -14,6 +14,7 @@ import { WebhooksModule } from './infrastructure/webhooks/webhooks.module';
 import { CommunicationsModule } from './modules/communications/communications.module';
 import { ExportsModule } from './modules/exports/exports.module';
 import { FilesModule } from './modules/files/files.module';
+import { IntegrationsModule } from './modules/integrations/integrations.module';
 import { RequestsModule } from './modules/requests/requests.module';
 import type { RuntimeEnv } from './common/config/runtime-env';
 import { ConfigService } from '@nestjs/config';
@@ -43,6 +44,7 @@ import { ConfigService } from '@nestjs/config';
     CommunicationsModule,
     ExportsModule,
     FilesModule,
+    IntegrationsModule,
     RequestsModule,
   ],
   controllers: [AppController],

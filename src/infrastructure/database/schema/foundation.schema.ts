@@ -17,6 +17,13 @@ import {
   AUDIT_CHANNEL_VALUES,
   type AuditChannel,
 } from '../../../common/audit/audit-channel';
+import {
+  INTEGRATION_AUTH_TYPE_VALUES,
+  INTEGRATION_CONNECTION_STATUS_VALUES,
+  INTEGRATION_PROVIDER_KEY_VALUES,
+  SYNC_JOB_STATUS_VALUES,
+  SYNC_JOB_TYPE_VALUES,
+} from '../../../common/integrations/integration-types';
 import type { ResourceType } from '../../../common/audit/resource-types';
 import {
   REMINDER_CHANNEL_VALUES,
@@ -191,6 +198,28 @@ export const exportJobStatusEnum = pgEnum('export_job_status', [
   'completed',
   'failed',
 ]);
+
+export const integrationProviderKeyEnum = pgEnum(
+  'integration_provider_key',
+  INTEGRATION_PROVIDER_KEY_VALUES,
+);
+
+export const integrationAuthTypeEnum = pgEnum(
+  'integration_auth_type',
+  INTEGRATION_AUTH_TYPE_VALUES,
+);
+
+export const integrationConnectionStatusEnum = pgEnum(
+  'integration_connection_status',
+  INTEGRATION_CONNECTION_STATUS_VALUES,
+);
+
+export const syncJobTypeEnum = pgEnum('sync_job_type', SYNC_JOB_TYPE_VALUES);
+
+export const syncJobStatusEnum = pgEnum(
+  'sync_job_status',
+  SYNC_JOB_STATUS_VALUES,
+);
 
 export const fileAssetStatusEnum = pgEnum('file_asset_status', [
   'active',
@@ -914,6 +943,138 @@ export const exportJobs = pgTable(
       table.createdAt,
     ),
     index('export_jobs_request_status_idx').on(table.requestId, table.status),
+  ],
+);
+
+export const integrationConnections = pgTable(
+  'integration_connections',
+  {
+    id: text('id').primaryKey(),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    workspaceId: text('workspace_id').references(() => workspaces.id, {
+      onDelete: 'set null',
+    }),
+    providerKey: integrationProviderKeyEnum('provider_key').notNull(),
+    authType: integrationAuthTypeEnum('auth_type').notNull(),
+    credentialsRef: varchar('credentials_ref', { length: 255 }),
+    settings: jsonb('settings')
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    metadata: jsonb('metadata')
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    status: integrationConnectionStatusEnum('status')
+      .notNull()
+      .default('pending'),
+    errorMessage: text('error_message'),
+    lastTestedAt: timestamp('last_tested_at', { withTimezone: true }),
+    lastSyncedAt: timestamp('last_synced_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index('integration_connections_org_provider_idx').on(
+      table.organizationId,
+      table.providerKey,
+    ),
+    index('integration_connections_workspace_idx').on(table.workspaceId),
+  ],
+);
+
+export const syncJobs = pgTable(
+  'sync_jobs',
+  {
+    id: text('id').primaryKey(),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    connectionId: text('connection_id')
+      .notNull()
+      .references(() => integrationConnections.id, { onDelete: 'cascade' }),
+    jobType: syncJobTypeEnum('job_type').notNull(),
+    targetResourceType: varchar('target_resource_type', { length: 120 }),
+    targetResourceId: text('target_resource_id'),
+    status: syncJobStatusEnum('status').notNull().default('queued'),
+    attemptCount: integer('attempt_count').notNull().default(0),
+    lastErrorCode: varchar('last_error_code', { length: 120 }),
+    lastErrorMessage: text('last_error_message'),
+    payload: jsonb('payload')
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    result: jsonb('result')
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    queuedAt: timestamp('queued_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    startedAt: timestamp('started_at', { withTimezone: true }),
+    finishedAt: timestamp('finished_at', { withTimezone: true }),
+  },
+  (table) => [
+    index('sync_jobs_org_status_idx').on(table.organizationId, table.status),
+    index('sync_jobs_connection_queued_idx').on(
+      table.connectionId,
+      table.queuedAt,
+    ),
+  ],
+);
+
+export const integrationExternalReferences = pgTable(
+  'integration_external_references',
+  {
+    id: text('id').primaryKey(),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    connectionId: text('connection_id')
+      .notNull()
+      .references(() => integrationConnections.id, { onDelete: 'cascade' }),
+    providerKey: integrationProviderKeyEnum('provider_key').notNull(),
+    localResourceType: varchar('local_resource_type', { length: 120 }).notNull(),
+    localResourceId: text('local_resource_id').notNull(),
+    externalObjectType: varchar('external_object_type', { length: 120 }).notNull(),
+    externalId: text('external_id').notNull(),
+    externalReferenceKey: varchar('external_reference_key', { length: 120 }),
+    metadata: jsonb('metadata')
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    lastSyncedAt: timestamp('last_synced_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('integration_external_refs_connection_local_obj_key').on(
+      table.connectionId,
+      table.localResourceType,
+      table.localResourceId,
+      table.externalObjectType,
+    ),
+    uniqueIndex('integration_external_refs_connection_external_obj_key').on(
+      table.connectionId,
+      table.externalObjectType,
+      table.externalId,
+    ),
+    index('integration_external_refs_org_provider_idx').on(
+      table.organizationId,
+      table.providerKey,
+    ),
   ],
 );
 

@@ -57,6 +57,20 @@
       "when": 1776861935287,
       "tag": "0007_melodic_tarantula",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1776868527589,
+      "tag": "0008_blushing_synch",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1776877250663,
+      "tag": "0009_groovy_cammi",
+      "breakpoints": true
     }
   ]
 }

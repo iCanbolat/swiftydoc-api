@@ -61,6 +61,12 @@ export const runtimeEnvSchema = z
     PLIVO_FROM_NUMBER: z.string().min(1).optional(),
     RESEND_API_KEY: z.string().min(1).optional(),
     RESEND_DEFAULT_FROM_EMAIL: z.string().email().optional(),
+    ZOHO_BOOKS_API_BASE_URL: z
+      .string()
+      .url()
+      .default('https://www.zohoapis.com/books/v3'),
+    ZOHO_BOOKS_ACCESS_TOKEN: z.string().min(1).optional(),
+    ZOHO_BOOKS_ORGANIZATION_ID: z.string().min(1).optional(),
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV !== 'test' && !env.DATABASE_URL) {

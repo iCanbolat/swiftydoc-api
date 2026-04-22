@@ -143,6 +143,33 @@ describe('AppController (e2e)', () => {
       .expect(400);
   });
 
+  it('/v1/integrations/connections (POST) rejects invalid dto payload', () => {
+    return request(app.getHttpServer())
+      .post('/v1/integrations/connections')
+      .send({
+        organizationId: 'org_123',
+      })
+      .expect(400);
+  });
+
+  it('/v1/integrations/connections/:id/test (POST) rejects invalid dto payload', () => {
+    return request(app.getHttpServer())
+      .post('/v1/integrations/connections/connection_123/test')
+      .send({})
+      .expect(400);
+  });
+
+  it('/v1/integrations/connections/:id/sync (POST) rejects invalid dto payload', () => {
+    return request(app.getHttpServer())
+      .post('/v1/integrations/connections/connection_123/sync')
+      .send({})
+      .expect(400);
+  });
+
+  it('/v1/sync-jobs (GET) rejects missing query payload', () => {
+    return request(app.getHttpServer()).get('/v1/sync-jobs').expect(400);
+  });
+
   it('/docs-json (GET) exposes typed webhook enums in the OpenAPI document', () => {
     return request(app.getHttpServer())
       .get('/docs-json')
@@ -164,6 +191,12 @@ describe('AppController (e2e)', () => {
         expect(
           body.paths['/v1/communications/email-template-variants'],
         ).toBeDefined();
+        expect(body.paths['/v1/integrations/providers']).toBeDefined();
+        expect(body.paths['/v1/integrations/connections']).toBeDefined();
+        expect(body.paths['/v1/integrations/connections/{id}']).toBeDefined();
+        expect(body.paths['/v1/integrations/connections/{id}/test']).toBeDefined();
+        expect(body.paths['/v1/integrations/connections/{id}/sync']).toBeDefined();
+        expect(body.paths['/v1/sync-jobs']).toBeDefined();
 
         const eventTypeEnum =
           body.components.schemas.EmitWebhookEventDto.properties.eventType
@@ -199,6 +232,18 @@ describe('AppController (e2e)', () => {
         const reminderProviderEnum =
           body.components.schemas.UpsertReminderProviderConfigDto.properties
             .provider.enum ?? body.components.schemas.ReminderProvider?.enum;
+        const integrationProviderEnum =
+          body.components.schemas.CreateIntegrationConnectionDto.properties
+            .providerKey.enum ??
+          body.components.schemas.IntegrationProviderKey?.enum;
+        const integrationAuthTypeEnum =
+          body.components.schemas.CreateIntegrationConnectionDto.properties
+            .authType.enum ?? body.components.schemas.IntegrationAuthType?.enum;
+        const syncJobStatusEnum =
+          body.components.schemas.TriggerSyncJobResponseDataDto.properties.status
+            .enum ?? body.components.schemas.SyncJobStatus?.enum;
+        const triggerSyncPayloadExample =
+          body.components.schemas.TriggerSyncJobDto.properties.payload.example;
 
         expect(eventTypeEnum).toContain('file.uploaded');
         expect(eventTypeEnum).toContain('request.viewed');
@@ -215,6 +260,14 @@ describe('AppController (e2e)', () => {
         expect(exportStatusEnum).toContain('processing');
         expect(reminderChannelEnum).toContain('whatsapp');
         expect(reminderProviderEnum).toContain('resend');
+        expect(integrationProviderEnum).toContain('whatsapp_cloud_api');
+        expect(integrationProviderEnum).toContain('plivo');
+        expect(integrationProviderEnum).toContain('resend');
+        expect(integrationProviderEnum).toContain('zoho_books');
+        expect(integrationAuthTypeEnum).toContain('bearer_token');
+        expect(syncJobStatusEnum).toContain('succeeded');
+        expect(triggerSyncPayloadExample.domain).toBe('accounting');
+        expect(triggerSyncPayloadExample.entityType).toBe('customer');
       });
   });
 
