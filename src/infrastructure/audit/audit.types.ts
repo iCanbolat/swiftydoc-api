@@ -2,10 +2,12 @@ import type {
   AuditActionForCategory,
   AuditCategory,
 } from '../../common/audit/audit-actions';
+import type { AuditChannel } from '../../common/audit/audit-channel';
 import type { ResourceType } from '../../common/audit/resource-types';
 
 interface AuditLogEntryBase {
   organizationId?: string;
+  channel?: AuditChannel;
   actorType?: string;
   actorId?: string;
   resourceType?: ResourceType;

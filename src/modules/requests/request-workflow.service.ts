@@ -9,11 +9,13 @@ import {
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { AUDIT_ACTIONS } from '../../common/audit/audit-actions';
+import type { AuditChannel } from '../../common/audit/audit-channel';
 import { RESOURCE_TYPES } from '../../common/audit/resource-types';
 import {
   type PortalLinkPurpose,
   type PortalLinkStatus,
 } from '../../common/portal/portal-link-types';
+import { type ReminderChannel } from '../../common/reminders/reminder-types';
 import {
   type RequestStatus,
   type RequestTransitionAction,
@@ -23,6 +25,7 @@ import {
 import { WEBHOOK_EVENTS } from '../../common/webhooks/webhook-events';
 import { AuditLogService } from '../../infrastructure/audit/audit-log.service';
 import { DatabaseService } from '../../infrastructure/database/database.service';
+import { RemindersService } from '../../infrastructure/reminders/reminders.service';
 import {
   answers,
   comments,
@@ -120,11 +123,25 @@ export interface CreateSubmissionItemCommentInput {
   metadata?: Record<string, unknown>;
 }
 
+export interface SendRequestReminderInput {
+  organizationId: string;
+  actorUserId?: string;
+  channel: ReminderChannel;
+  recipient: string;
+  subject?: string;
+  message?: string;
+  templateKey?: string;
+  templateVariables?: Record<string, unknown>;
+  locale?: string;
+  metadata?: Record<string, unknown>;
+}
+
 @Injectable()
 export class RequestWorkflowService {
   constructor(
     private readonly auditLogService: AuditLogService,
     private readonly databaseService: DatabaseService,
+    private readonly remindersService: RemindersService,
     private readonly webhookService: WebhookService,
   ) {}
 
@@ -359,6 +376,97 @@ export class RequestWorkflowService {
             ? null
             : (requestRow.closedAt?.toISOString() ?? null),
       updatedAt: now.toISOString(),
+    };
+  }
+
+  async sendRequestReminder(
+    requestId: string,
+    input: SendRequestReminderInput,
+  ) {
+    const db = this.getDatabase();
+
+    const [requestRow] = await db
+      .select({
+        id: requests.id,
+        requestCode: requests.requestCode,
+        status: requests.status,
+        workspaceId: requests.workspaceId,
+      })
+      .from(requests)
+      .where(
+        and(
+          eq(requests.id, requestId),
+          eq(requests.organizationId, input.organizationId),
+        ),
+      )
+      .limit(1);
+
+    if (!requestRow) {
+      throw new NotFoundException('Request not found.');
+    }
+
+    if (requestRow.status === 'closed' || requestRow.status === 'cancelled') {
+      throw new ConflictException(
+        `Cannot remind a request in status ${requestRow.status}.`,
+      );
+    }
+
+    const reminderResult = await this.remindersService.dispatchReminder({
+      organizationId: input.organizationId,
+      requestId,
+      channel: input.channel,
+      recipient: input.recipient,
+      subject: input.subject,
+      message: input.message,
+      templateKey: input.templateKey,
+      templateVariables: input.templateVariables,
+      locale: input.locale,
+      metadata: input.metadata,
+    });
+
+    await this.auditLogService.record({
+      category: 'data_access',
+      channel: this.mapReminderChannelToAuditChannel(input.channel),
+      action: AUDIT_ACTIONS.data_access.requestReminderSent,
+      organizationId: input.organizationId,
+      actorId: input.actorUserId,
+      actorType: input.actorUserId ? 'user' : undefined,
+      resourceType: RESOURCE_TYPES.automation.reminderDispatch,
+      resourceId: reminderResult.externalMessageId,
+      metadata: {
+        requestId,
+        requestCode: requestRow.requestCode,
+        status: requestRow.status,
+        channel: input.channel,
+        provider: reminderResult.provider,
+        recipient: input.recipient,
+        templateKey: input.templateKey ?? null,
+        locale: input.locale ?? null,
+        providerMetadata: reminderResult.metadata,
+        contextMetadata: input.metadata ?? {},
+      },
+    });
+
+    await this.webhookService.emitEvent(
+      WEBHOOK_EVENTS.requests.reminderSent,
+      {
+        requestId,
+        requestCode: requestRow.requestCode,
+        workspaceId: requestRow.workspaceId,
+        status: requestRow.status,
+        channel: input.channel,
+        provider: reminderResult.provider,
+        externalMessageId: reminderResult.externalMessageId,
+      },
+      input.organizationId,
+    );
+
+    return {
+      requestId,
+      channel: input.channel,
+      provider: reminderResult.provider,
+      externalMessageId: reminderResult.externalMessageId,
+      acceptedAt: reminderResult.acceptedAt,
     };
   }
 
@@ -1156,5 +1264,15 @@ export class RequestWorkflowService {
       default:
         throw new BadRequestException('Unsupported transition action.');
     }
+  }
+
+  private mapReminderChannelToAuditChannel(
+    channel: ReminderChannel,
+  ): AuditChannel {
+    if (channel === 'email' || channel === 'sms' || channel === 'whatsapp') {
+      return channel;
+    }
+
+    return 'api';
   }
 }

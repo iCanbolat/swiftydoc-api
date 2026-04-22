@@ -8,8 +8,10 @@ import { validateRuntimeEnv } from './common/config/runtime-env';
 import { AuditModule } from './infrastructure/audit/audit.module';
 import { DatabaseModule } from './infrastructure/database/database.module';
 import { QueueModule } from './infrastructure/queue/queue.module';
+import { RemindersModule } from './infrastructure/reminders/reminders.module';
 import { StorageModule } from './infrastructure/storage/storage.module';
 import { WebhooksModule } from './infrastructure/webhooks/webhooks.module';
+import { CommunicationsModule } from './modules/communications/communications.module';
 import { ExportsModule } from './modules/exports/exports.module';
 import { FilesModule } from './modules/files/files.module';
 import { RequestsModule } from './modules/requests/requests.module';
@@ -35,8 +37,10 @@ import { ConfigService } from '@nestjs/config';
     AuditModule,
     DatabaseModule,
     QueueModule,
+    RemindersModule,
     StorageModule,
     WebhooksModule,
+    CommunicationsModule,
     ExportsModule,
     FilesModule,
     RequestsModule,

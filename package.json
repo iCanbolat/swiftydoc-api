@@ -9,6 +9,7 @@
     "build": "nest build",
     "db:generate": "drizzle-kit generate --config=drizzle.config.ts",
     "db:migrate": "drizzle-kit migrate --config=drizzle.config.ts",
+    "db:seed:communications": "node scripts/seed-communications.cjs",
     "db:studio": "drizzle-kit studio --config=drizzle.config.ts",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",

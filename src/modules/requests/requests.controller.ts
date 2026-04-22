@@ -12,6 +12,8 @@ import { CreatePortalLinkDto } from './dto/create-portal-link.dto';
 import { CreatePortalLinkResponseDto } from './dto/create-portal-link-response.dto';
 import { CreateRequestDto } from './dto/create-request.dto';
 import { CreateRequestResponseDto } from './dto/create-request-response.dto';
+import { SendRequestReminderDto } from './dto/send-request-reminder.dto';
+import { SendRequestReminderResponseDto } from './dto/send-request-reminder-response.dto';
 import { TransitionRequestDto } from './dto/transition-request.dto';
 import { TransitionRequestResponseDto } from './dto/transition-request-response.dto';
 import { RequestWorkflowService } from './request-workflow.service';
@@ -71,6 +73,38 @@ export class RequestsController {
 
     return {
       data: request,
+    };
+  }
+
+  @ApiOperation({
+    summary: 'Send a reminder for a request via configured channel.',
+  })
+  @ApiCreatedResponse({ type: SendRequestReminderResponseDto })
+  @ApiBadRequestResponse({ description: 'DTO validation failed.' })
+  @ApiNotFoundResponse({ description: 'Request not found.' })
+  @Post(':id/remind')
+  async sendReminder(
+    @Param('id') requestId: string,
+    @Body() body: SendRequestReminderDto,
+  ) {
+    const reminder = await this.requestWorkflowService.sendRequestReminder(
+      requestId,
+      {
+        organizationId: body.organizationId,
+        actorUserId: body.actorUserId,
+        channel: body.channel,
+        recipient: body.recipient,
+        subject: body.subject,
+        message: body.message,
+        templateKey: body.templateKey,
+        templateVariables: body.templateVariables,
+        locale: body.locale,
+        metadata: body.metadata,
+      },
+    );
+
+    return {
+      data: reminder,
     };
   }
 

@@ -18,6 +18,7 @@ export class AuditLogService {
         auditId: eventId,
         category: entry.category,
         action: entry.action,
+        channel: entry.channel ?? null,
         organizationId: entry.organizationId ?? null,
       }),
     );
@@ -31,6 +32,7 @@ export class AuditLogService {
         id: eventId,
         organizationId: entry.organizationId,
         category: entry.category,
+        channel: entry.channel,
         action: entry.action,
         actorType: entry.actorType,
         actorId: entry.actorId,

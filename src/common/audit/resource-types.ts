@@ -5,6 +5,8 @@ export const RESOURCE_TYPES = {
     exportJob: 'export_job',
     integrationConnection: 'integration_connection',
     queueJob: 'queue_job',
+    reminderDispatch: 'reminder_dispatch',
+    reminderProviderConfig: 'reminder_provider_config',
     syncJob: 'sync_job',
     webhookDelivery: 'webhook_delivery',
     webhookEndpoint: 'webhook_endpoint',
@@ -25,6 +27,8 @@ export const RESOURCE_TYPES = {
   },
   identity: {
     auditEvent: 'audit_event',
+    brandingSettings: 'branding_settings',
+    emailTemplateVariant: 'email_template_variant',
     oauthApplication: 'oauth_application',
     oauthGrant: 'oauth_grant',
     organization: 'organization',

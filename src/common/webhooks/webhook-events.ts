@@ -15,6 +15,7 @@ export const WEBHOOK_EVENTS = {
     completed: 'request.completed',
     created: 'request.created',
     overdue: 'request.overdue',
+    reminderSent: 'request.reminder_sent',
     sent: 'request.sent',
     viewed: 'request.viewed',
   },

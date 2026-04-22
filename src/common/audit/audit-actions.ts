@@ -3,6 +3,8 @@ type ValueOf<T> = T[keyof T];
 export const AUDIT_ACTIONS = {
   security: {},
   data_access: {
+    brandingSettingsUpdated: 'data_access.branding_settings_updated',
+    emailTemplateVariantUpserted: 'data_access.email_template_variant_upserted',
     exportJobCompleted: 'data_access.export_job_completed',
     exportJobFailed: 'data_access.export_job_failed',
     exportJobQueued: 'data_access.export_job_queued',
@@ -12,8 +14,10 @@ export const AUDIT_ACTIONS = {
     portalLinkVerified: 'data_access.portal_link_verified',
     requestClosed: 'data_access.request_closed',
     requestCreated: 'data_access.request_created',
+    requestReminderSent: 'data_access.request_reminder_sent',
     requestReopened: 'data_access.request_reopened',
     requestSent: 'data_access.request_sent',
+    reminderProviderConfigured: 'data_access.reminder_provider_configured',
     submissionItemApproved: 'data_access.submission_item_approved',
     submissionItemRejected: 'data_access.submission_item_rejected',
     submissionAutosaved: 'data_access.submission_autosaved',

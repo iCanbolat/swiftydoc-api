@@ -49,6 +49,18 @@ export const runtimeEnvSchema = z
     BUNNY_STORAGE_REGION: z.string().min(1).optional(),
     BUNNY_STORAGE_API_KEY: z.string().min(1).optional(),
     BUNNY_PULL_ZONE_BASE_URL: z.string().url().optional(),
+    WHATSAPP_CLOUD_API_BASE_URL: z
+      .string()
+      .url()
+      .default('https://graph.facebook.com'),
+    WHATSAPP_CLOUD_API_VERSION: z.string().min(1).default('v23.0'),
+    WHATSAPP_CLOUD_API_TOKEN: z.string().min(1).optional(),
+    WHATSAPP_CLOUD_API_PHONE_NUMBER_ID: z.string().min(1).optional(),
+    PLIVO_AUTH_ID: z.string().min(1).optional(),
+    PLIVO_AUTH_TOKEN: z.string().min(1).optional(),
+    PLIVO_FROM_NUMBER: z.string().min(1).optional(),
+    RESEND_API_KEY: z.string().min(1).optional(),
+    RESEND_DEFAULT_FROM_EMAIL: z.string().email().optional(),
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV !== 'test' && !env.DATABASE_URL) {

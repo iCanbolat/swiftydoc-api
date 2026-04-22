@@ -69,6 +69,13 @@ describe('AppController (e2e)', () => {
       .expect(400);
   });
 
+  it('/v1/requests/:id/remind (POST) rejects invalid dto payload', () => {
+    return request(app.getHttpServer())
+      .post('/v1/requests/req_123/remind')
+      .send({})
+      .expect(400);
+  });
+
   it('/v1/portal/access (POST) rejects missing token payload', () => {
     return request(app.getHttpServer())
       .post('/v1/portal/access')
@@ -109,6 +116,33 @@ describe('AppController (e2e)', () => {
       .expect(400);
   });
 
+  it('/v1/communications/provider-configs (PUT) rejects invalid dto payload', () => {
+    return request(app.getHttpServer())
+      .put('/v1/communications/provider-configs')
+      .send({
+        organizationId: 'org_123',
+      })
+      .expect(400);
+  });
+
+  it('/v1/communications/branding (PUT) rejects invalid dto payload', () => {
+    return request(app.getHttpServer())
+      .put('/v1/communications/branding')
+      .send({
+        organizationId: 'org_123',
+      })
+      .expect(400);
+  });
+
+  it('/v1/communications/email-template-variants (PUT) rejects invalid dto payload', () => {
+    return request(app.getHttpServer())
+      .put('/v1/communications/email-template-variants')
+      .send({
+        organizationId: 'org_123',
+      })
+      .expect(400);
+  });
+
   it('/docs-json (GET) exposes typed webhook enums in the OpenAPI document', () => {
     return request(app.getHttpServer())
       .get('/docs-json')
@@ -116,6 +150,7 @@ describe('AppController (e2e)', () => {
       .expect(({ body }) => {
         expect(body.paths['/v1/webhooks/events']).toBeDefined();
         expect(body.paths['/v1/requests/{id}/send']).toBeDefined();
+        expect(body.paths['/v1/requests/{id}/remind']).toBeDefined();
         expect(body.paths['/v1/requests/{id}/portal-links']).toBeDefined();
         expect(body.paths['/v1/submissions/{id}/answers']).toBeDefined();
         expect(body.paths['/v1/portal/access']).toBeDefined();
@@ -124,6 +159,11 @@ describe('AppController (e2e)', () => {
         expect(body.paths['/v1/reviews/{itemId}/comments']).toBeDefined();
         expect(body.paths['/v1/exports/jobs']).toBeDefined();
         expect(body.paths['/v1/exports/jobs/{id}']).toBeDefined();
+        expect(body.paths['/v1/communications/provider-configs']).toBeDefined();
+        expect(body.paths['/v1/communications/branding']).toBeDefined();
+        expect(
+          body.paths['/v1/communications/email-template-variants'],
+        ).toBeDefined();
 
         const eventTypeEnum =
           body.components.schemas.EmitWebhookEventDto.properties.eventType
@@ -153,11 +193,18 @@ describe('AppController (e2e)', () => {
         const exportStatusEnum =
           body.components.schemas.ExportJobResponseDataDto.properties.status
             .enum ?? body.components.schemas.ExportJobStatus?.enum;
+        const reminderChannelEnum =
+          body.components.schemas.SendRequestReminderDto.properties.channel
+            .enum ?? body.components.schemas.ReminderChannel?.enum;
+        const reminderProviderEnum =
+          body.components.schemas.UpsertReminderProviderConfigDto.properties
+            .provider.enum ?? body.components.schemas.ReminderProvider?.enum;
 
         expect(eventTypeEnum).toContain('file.uploaded');
         expect(eventTypeEnum).toContain('request.viewed');
         expect(eventTypeEnum).toContain('request.completed');
         expect(eventTypeEnum).toContain('request.overdue');
+        expect(eventTypeEnum).toContain('request.reminder_sent');
         expect(subscribedEventsEnum).toContain('*');
         expect(requestStatusEnum).toContain('closed');
         expect(portalPurposeEnum).toContain('request_access');
@@ -166,6 +213,8 @@ describe('AppController (e2e)', () => {
         expect(commentAuthorTypeEnum).toContain('reviewer');
         expect(exportTypeEnum).toContain('zip');
         expect(exportStatusEnum).toContain('processing');
+        expect(reminderChannelEnum).toContain('whatsapp');
+        expect(reminderProviderEnum).toContain('resend');
       });
   });
 

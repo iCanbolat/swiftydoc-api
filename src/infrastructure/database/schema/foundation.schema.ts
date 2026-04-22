@@ -13,7 +13,15 @@ import {
   varchar,
 } from 'drizzle-orm/pg-core';
 import type { AuditAction } from '../../../common/audit/audit-actions';
+import {
+  AUDIT_CHANNEL_VALUES,
+  type AuditChannel,
+} from '../../../common/audit/audit-channel';
 import type { ResourceType } from '../../../common/audit/resource-types';
+import {
+  REMINDER_CHANNEL_VALUES,
+  REMINDER_PROVIDER_VALUES,
+} from '../../../common/reminders/reminder-types';
 
 export const organizationStatusEnum = pgEnum('organization_status', [
   'active',
@@ -70,6 +78,11 @@ export const auditCategoryEnum = pgEnum('audit_category', [
   'system',
 ]);
 
+export const auditEventChannelEnum = pgEnum(
+  'audit_event_channel',
+  AUDIT_CHANNEL_VALUES,
+);
+
 export const clientStatusEnum = pgEnum('client_status', ['active', 'archived']);
 
 export const contactStatusEnum = pgEnum('contact_status', [
@@ -85,6 +98,16 @@ export const recipientStatusEnum = pgEnum('recipient_status', [
 export const recipientDeliveryChannelEnum = pgEnum(
   'recipient_delivery_channel',
   ['email', 'whatsapp', 'sms'],
+);
+
+export const reminderChannelEnum = pgEnum(
+  'reminder_channel',
+  REMINDER_CHANNEL_VALUES,
+);
+
+export const reminderProviderEnum = pgEnum(
+  'reminder_provider',
+  REMINDER_PROVIDER_VALUES,
 );
 
 export const templateStatusEnum = pgEnum('template_status', [
@@ -894,6 +917,111 @@ export const exportJobs = pgTable(
   ],
 );
 
+export const organizationReminderProviderConfigs = pgTable(
+  'organization_reminder_provider_configs',
+  {
+    id: text('id').primaryKey(),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    channel: reminderChannelEnum('channel').notNull(),
+    provider: reminderProviderEnum('provider').notNull(),
+    enabled: boolean('enabled').notNull().default(true),
+    config: jsonb('config')
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('org_reminder_provider_configs_org_channel_key').on(
+      table.organizationId,
+      table.channel,
+    ),
+    index('org_reminder_provider_configs_org_enabled_idx').on(
+      table.organizationId,
+      table.enabled,
+    ),
+  ],
+);
+
+export const organizationBrandingSettings = pgTable(
+  'organization_branding_settings',
+  {
+    id: text('id').primaryKey(),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    displayName: varchar('display_name', { length: 160 }).notNull(),
+    logoUrl: varchar('logo_url', { length: 512 }),
+    primaryColor: varchar('primary_color', { length: 16 }),
+    secondaryColor: varchar('secondary_color', { length: 16 }),
+    emailFromName: varchar('email_from_name', { length: 160 }),
+    emailReplyTo: varchar('email_reply_to', { length: 255 }),
+    metadata: jsonb('metadata')
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('organization_branding_settings_org_key').on(
+      table.organizationId,
+    ),
+  ],
+);
+
+export const organizationEmailTemplateVariants = pgTable(
+  'organization_email_template_variants',
+  {
+    id: text('id').primaryKey(),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    templateKey: varchar('template_key', { length: 120 }).notNull(),
+    locale: varchar('locale', { length: 16 }).notNull().default('en'),
+    provider: reminderProviderEnum('provider').notNull().default('resend'),
+    brandingSettingId: text('branding_setting_id').references(
+      () => organizationBrandingSettings.id,
+      { onDelete: 'set null' },
+    ),
+    resendTemplateId: varchar('resend_template_id', { length: 120 }),
+    subjectTemplate: text('subject_template').notNull(),
+    bodyTemplate: text('body_template').notNull(),
+    metadata: jsonb('metadata')
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('org_email_tpl_variants_org_key_locale_key').on(
+      table.organizationId,
+      table.templateKey,
+      table.locale,
+    ),
+    index('org_email_tpl_variants_org_template_idx').on(
+      table.organizationId,
+      table.templateKey,
+    ),
+  ],
+);
+
 export const fileAssets = pgTable(
   'file_assets',
   {
@@ -956,6 +1084,7 @@ export const auditEvents = pgTable(
       onDelete: 'set null',
     }),
     category: auditCategoryEnum('category').notNull(),
+    channel: auditEventChannelEnum('channel').$type<AuditChannel>(),
     action: varchar('action', { length: 120 }).$type<AuditAction>().notNull(),
     actorType: varchar('actor_type', { length: 64 }),
     actorId: text('actor_id'),
