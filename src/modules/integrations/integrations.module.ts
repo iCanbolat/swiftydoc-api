@@ -1,4 +1,7 @@
 import { Module } from '@nestjs/common';
+import { GoogleDriveIntegrationConnector } from '../../infrastructure/integrations/google-drive-integration.connector';
+import { OdooIntegrationConnector } from '../../infrastructure/integrations/odoo-integration.connector';
+import { OneDriveSharePointIntegrationConnector } from '../../infrastructure/integrations/onedrive-sharepoint-integration.connector';
 import { PlivoIntegrationConnector } from '../../infrastructure/integrations/plivo-integration.connector';
 import { ResendIntegrationConnector } from '../../infrastructure/integrations/resend-integration.connector';
 import { WhatsAppCloudIntegrationConnector } from '../../infrastructure/integrations/whatsapp-cloud-integration.connector';
@@ -17,6 +20,10 @@ import { IntegrationsService } from './integrations.service';
     PlivoIntegrationConnector,
     ResendIntegrationConnector,
     ZohoBooksIntegrationConnector,
+    OdooIntegrationConnector,
+    GoogleDriveIntegrationConnector,
+    OneDriveSharePointIntegrationConnector,
   ],
+  exports: [IntegrationsService],
 })
 export class IntegrationsModule {}

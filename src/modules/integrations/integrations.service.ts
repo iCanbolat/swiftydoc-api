@@ -31,6 +31,9 @@ import type {
   IntegrationConnector,
   IntegrationSyncResult,
 } from '../../infrastructure/integrations/integration-connector.types';
+import { GoogleDriveIntegrationConnector } from '../../infrastructure/integrations/google-drive-integration.connector';
+import { OdooIntegrationConnector } from '../../infrastructure/integrations/odoo-integration.connector';
+import { OneDriveSharePointIntegrationConnector } from '../../infrastructure/integrations/onedrive-sharepoint-integration.connector';
 import { PlivoIntegrationConnector } from '../../infrastructure/integrations/plivo-integration.connector';
 import { ResendIntegrationConnector } from '../../infrastructure/integrations/resend-integration.connector';
 import { WhatsAppCloudIntegrationConnector } from '../../infrastructure/integrations/whatsapp-cloud-integration.connector';
@@ -40,7 +43,10 @@ import type {
   IntegrationExternalReferenceRecord,
   IntegrationExternalReferenceSnapshot,
 } from '../../common/integrations/integration-external-reference';
-import { isAccountingErpSyncPayload } from '../../common/integrations/integration-sync-payload';
+import {
+  isAccountingErpSyncPayload,
+  isStorageExportSyncPayload,
+} from '../../common/integrations/integration-sync-payload';
 import { JobQueueService } from '../../infrastructure/queue/job-queue.service';
 import { WebhookService } from '../../infrastructure/webhooks/webhook.service';
 import {
@@ -50,6 +56,8 @@ import {
 } from './integrations.constants';
 import type {
   CreateIntegrationConnectionInput,
+  ExecuteIntegrationSyncInput,
+  ExecutedIntegrationSyncResult,
   IntegrationConnectionRecord,
   IntegrationProviderListItem,
   IntegrationSyncQueuePayload,
@@ -64,7 +72,10 @@ import type {
 
 @Injectable()
 export class IntegrationsService implements OnModuleInit {
-  private readonly connectors = new Map<IntegrationProviderKey, IntegrationConnector>();
+  private readonly connectors = new Map<
+    IntegrationProviderKey,
+    IntegrationConnector
+  >();
 
   constructor(
     private readonly auditLogService: AuditLogService,
@@ -75,12 +86,18 @@ export class IntegrationsService implements OnModuleInit {
     private readonly plivoConnector: PlivoIntegrationConnector,
     private readonly resendConnector: ResendIntegrationConnector,
     private readonly zohoBooksConnector: ZohoBooksIntegrationConnector,
+    private readonly odooConnector: OdooIntegrationConnector,
+    private readonly googleDriveConnector: GoogleDriveIntegrationConnector,
+    private readonly oneDriveSharePointConnector: OneDriveSharePointIntegrationConnector,
   ) {
     for (const connector of [
       this.whatsappCloudConnector,
       this.plivoConnector,
       this.resendConnector,
       this.zohoBooksConnector,
+      this.odooConnector,
+      this.googleDriveConnector,
+      this.oneDriveSharePointConnector,
     ]) {
       this.connectors.set(connector.providerKey, connector);
     }
@@ -104,7 +121,8 @@ export class IntegrationsService implements OnModuleInit {
   ): Promise<IntegrationConnectionRecord> {
     this.assertProviderSupported(input.providerKey);
 
-    const authType = input.authType ?? this.getDefaultAuthType(input.providerKey);
+    const authType =
+      input.authType ?? this.getDefaultAuthType(input.providerKey);
     this.assertAuthTypeSupported(authType);
 
     const db = this.getDatabase();
@@ -184,7 +202,10 @@ export class IntegrationsService implements OnModuleInit {
     connectionId: string,
     input: TestIntegrationConnectionInput,
   ): Promise<TestedIntegrationConnectionResult> {
-    const connection = await this.getConnection(connectionId, input.organizationId);
+    const connection = await this.getConnection(
+      connectionId,
+      input.organizationId,
+    );
     const connector = this.resolveConnector(connection.providerKey);
 
     const result = await this.executeConnectorTest(connection, connector);
@@ -229,7 +250,10 @@ export class IntegrationsService implements OnModuleInit {
     connectionId: string,
     input: QueueIntegrationSyncInput,
   ): Promise<TriggeredSyncJobResult> {
-    const connection = await this.getConnection(connectionId, input.organizationId);
+    const connection = await this.getConnection(
+      connectionId,
+      input.organizationId,
+    );
     const connector = this.resolveConnector(connection.providerKey);
     const provider = this.getProviderCatalogEntry(connection.providerKey);
 
@@ -266,12 +290,13 @@ export class IntegrationsService implements OnModuleInit {
       })
       .returning();
 
-    const queueJobId = await this.jobQueueService.enqueue<IntegrationSyncQueuePayload>(
-      'integrations.sync',
-      {
-        syncJobId: syncJob.id,
-      },
-    );
+    const queueJobId =
+      await this.jobQueueService.enqueue<IntegrationSyncQueuePayload>(
+        'integrations.sync',
+        {
+          syncJobId: syncJob.id,
+        },
+      );
 
     await this.auditLogService.record({
       category: 'data_access',
@@ -315,6 +340,79 @@ export class IntegrationsService implements OnModuleInit {
       .limit(50);
   }
 
+  async executeSyncNow(
+    connectionId: string,
+    input: ExecuteIntegrationSyncInput,
+  ): Promise<ExecutedIntegrationSyncResult> {
+    const connection = await this.getConnection(
+      connectionId,
+      input.organizationId,
+    );
+    const connector = this.resolveConnector(connection.providerKey);
+    const existingExternalReference = await this.findExternalReferenceByPayload(
+      connection,
+      input.payload,
+    );
+    const db = this.getDatabase();
+
+    try {
+      const result = await connector.sync({
+        connectionId: connection.id,
+        organizationId: connection.organizationId,
+        settings: connection.settings,
+        metadata: connection.metadata,
+        syncPayload: input.payload,
+        targetResourceType: input.targetResourceType,
+        targetResourceId: input.targetResourceId,
+        externalReference: existingExternalReference,
+        artifact: input.artifact,
+      });
+
+      const finishedAt = new Date();
+      const persistedExternalReference = result.externalReference
+        ? await this.upsertExternalReference(
+            connection,
+            result.externalReference,
+            finishedAt,
+          )
+        : null;
+
+      const [updatedConnection] = await db
+        .update(integrationConnections)
+        .set({
+          status: 'connected',
+          errorMessage: null,
+          lastSyncedAt: finishedAt,
+          updatedAt: finishedAt,
+        })
+        .where(eq(integrationConnections.id, connection.id))
+        .returning();
+
+      return {
+        connection: updatedConnection,
+        externalReference: persistedExternalReference,
+        result,
+      };
+    } catch (error) {
+      const finishedAt = new Date();
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : 'Unknown integration sync error';
+
+      await db
+        .update(integrationConnections)
+        .set({
+          status: 'degraded',
+          errorMessage,
+          updatedAt: finishedAt,
+        })
+        .where(eq(integrationConnections.id, connection.id));
+
+      throw error;
+    }
+  }
+
   sanitizeConnection(connection: IntegrationConnectionRecord) {
     return {
       ...connection,
@@ -322,7 +420,9 @@ export class IntegrationsService implements OnModuleInit {
     };
   }
 
-  private async processSyncJob(syncJobId: string): Promise<ProcessedSyncJobResult> {
+  private async processSyncJob(
+    syncJobId: string,
+  ): Promise<ProcessedSyncJobResult> {
     const db = this.getDatabase();
     const [syncJob] = await db
       .select()
@@ -334,11 +434,14 @@ export class IntegrationsService implements OnModuleInit {
       throw new NotFoundException('Sync job not found.');
     }
 
-    const connection = await this.getConnection(syncJob.connectionId, syncJob.organizationId);
+    const connection = await this.getConnection(
+      syncJob.connectionId,
+      syncJob.organizationId,
+    );
     const connector = this.resolveConnector(connection.providerKey);
-    const existingExternalReference = await this.findExternalReference(
+    const existingExternalReference = await this.findExternalReferenceByPayload(
       connection,
-      syncJob,
+      syncJob.payload,
     );
     const startedAt = new Date();
 
@@ -449,7 +552,9 @@ export class IntegrationsService implements OnModuleInit {
     } catch (error) {
       const finishedAt = new Date();
       const errorMessage =
-        error instanceof Error ? error.message : 'Unknown integration sync error';
+        error instanceof Error
+          ? error.message
+          : 'Unknown integration sync error';
 
       const [failedSyncJob] = await db
         .update(syncJobs)
@@ -517,7 +622,9 @@ export class IntegrationsService implements OnModuleInit {
       });
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : 'Unknown integration test error';
+        error instanceof Error
+          ? error.message
+          : 'Unknown integration test error';
 
       return {
         success: false,
@@ -531,7 +638,9 @@ export class IntegrationsService implements OnModuleInit {
     }
   }
 
-  private resolveConnector(providerKey: IntegrationProviderKey): IntegrationConnector {
+  private resolveConnector(
+    providerKey: IntegrationProviderKey,
+  ): IntegrationConnector {
     const connector = this.connectors.get(providerKey);
 
     if (!connector) {
@@ -549,17 +658,19 @@ export class IntegrationsService implements OnModuleInit {
     );
 
     if (!provider) {
-      throw new BadRequestException(`Unsupported integration provider ${providerKey}.`);
+      throw new BadRequestException(
+        `Unsupported integration provider ${providerKey}.`,
+      );
     }
 
     return provider;
   }
 
-  private async findExternalReference(
+  private async findExternalReferenceByPayload(
     connection: IntegrationConnectionRecord,
-    syncJob: SyncJobRecord,
+    payload: SyncJobRecord['payload'] | ExecuteIntegrationSyncInput['payload'],
   ): Promise<IntegrationExternalReferenceRecord | null> {
-    const lookup = this.resolveExternalReferenceLookup(syncJob.payload);
+    const lookup = this.resolveExternalReferenceLookup(payload);
 
     if (!lookup) {
       return null;
@@ -653,36 +764,49 @@ export class IntegrationsService implements OnModuleInit {
   }
 
   private resolveExternalReferenceLookup(
-    payload: SyncJobRecord['payload'],
+    payload: SyncJobRecord['payload'] | ExecuteIntegrationSyncInput['payload'],
   ): IntegrationExternalReferenceLookup | null {
-    if (!isAccountingErpSyncPayload(payload)) {
-      return null;
+    if (
+      isAccountingErpSyncPayload(payload) ||
+      isStorageExportSyncPayload(payload)
+    ) {
+      return {
+        localResourceType: payload.source.resourceType,
+        localResourceId: payload.source.resourceId,
+        externalObjectType: payload.entityType,
+      };
     }
 
-    return {
-      localResourceType: payload.source.resourceType,
-      localResourceId: payload.source.resourceId,
-      externalObjectType: payload.entityType,
-    };
+    return null;
   }
 
-  private getDefaultAuthType(providerKey: IntegrationProviderKey): IntegrationAuthType {
+  private getDefaultAuthType(
+    providerKey: IntegrationProviderKey,
+  ): IntegrationAuthType {
     return this.getProviderCatalogEntry(providerKey).authType;
   }
 
   private assertProviderSupported(providerKey: string): void {
-    if (!INTEGRATION_PROVIDER_KEY_SET.has(providerKey as IntegrationProviderKey)) {
-      throw new BadRequestException(`Unsupported integration provider ${providerKey}.`);
+    if (
+      !INTEGRATION_PROVIDER_KEY_SET.has(providerKey as IntegrationProviderKey)
+    ) {
+      throw new BadRequestException(
+        `Unsupported integration provider ${providerKey}.`,
+      );
     }
   }
 
   private assertAuthTypeSupported(authType: string): void {
     if (!INTEGRATION_AUTH_TYPE_SET.has(authType as IntegrationAuthType)) {
-      throw new BadRequestException(`Unsupported integration auth type ${authType}.`);
+      throw new BadRequestException(
+        `Unsupported integration auth type ${authType}.`,
+      );
     }
   }
 
-  private redactSecrets(source: Record<string, unknown>): Record<string, unknown> {
+  private redactSecrets(
+    source: Record<string, unknown>,
+  ): Record<string, unknown> {
     const entries = Object.entries(source).map(([key, value]) => {
       if (this.isSecretLikeKey(key)) {
         return [key, '[redacted]'];

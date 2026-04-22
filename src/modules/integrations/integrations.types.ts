@@ -7,9 +7,11 @@ import type {
 } from '../../common/integrations/integration-types';
 import type { IntegrationSyncPayload } from '../../common/integrations/integration-sync-payload';
 import type {
+  IntegrationArtifact,
   IntegrationConnectionTestResult,
   IntegrationSyncResult,
 } from '../../infrastructure/integrations/integration-connector.types';
+import type { IntegrationExternalReferenceRecord } from '../../common/integrations/integration-external-reference';
 import type { IntegrationProviderCatalogEntry } from './integrations.constants';
 
 export interface CreateIntegrationConnectionInput {
@@ -93,6 +95,20 @@ export interface TestedIntegrationConnectionResult {
 
 export interface ProcessedSyncJobResult {
   syncJob: SyncJobRecord;
+  result: IntegrationSyncResult;
+}
+
+export interface ExecuteIntegrationSyncInput {
+  organizationId: string;
+  targetResourceType?: string;
+  targetResourceId?: string;
+  payload?: IntegrationSyncPayload;
+  artifact?: IntegrationArtifact;
+}
+
+export interface ExecutedIntegrationSyncResult {
+  connection: IntegrationConnectionRecord;
+  externalReference: IntegrationExternalReferenceRecord | null;
   result: IntegrationSyncResult;
 }
 

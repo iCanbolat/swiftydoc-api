@@ -6,6 +6,7 @@ export const AUDIT_ACTIONS = {
     brandingSettingsUpdated: 'data_access.branding_settings_updated',
     emailTemplateVariantUpserted: 'data_access.email_template_variant_upserted',
     exportJobCompleted: 'data_access.export_job_completed',
+    exportJobDeliveryReplayed: 'data_access.export_job_delivery_replayed',
     exportJobFailed: 'data_access.export_job_failed',
     exportJobQueued: 'data_access.export_job_queued',
     fileUploaded: 'data_access.file_uploaded',

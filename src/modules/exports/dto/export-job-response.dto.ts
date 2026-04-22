@@ -3,6 +3,37 @@ import {
   EXPORT_JOB_STATUS_VALUES,
   EXPORT_JOB_TYPE_VALUES,
 } from '../../../common/exports/export-types';
+import { EXPORT_ARTIFACT_DELIVERY_STATUS_VALUES } from '../exports.types';
+import { ExportArtifactDeliveryTargetDto } from './export-artifact-delivery-target.dto';
+
+export class ExportArtifactDeliveryResultDto {
+  @ApiProperty({ example: 'integration_connection_drive_123' })
+  connectionId!: string;
+
+  @ApiProperty({ example: 'google_drive' })
+  providerKey!: string;
+
+  @ApiProperty({ enum: ['delivered', 'failed'], example: 'delivered' })
+  status!: 'delivered' | 'failed';
+
+  @ApiProperty({ example: '2026-04-22T13:10:08.000Z' })
+  deliveredAt!: string;
+
+  @ApiPropertyOptional({ example: '1AbCdEfGhIjKlMnOp', nullable: true })
+  remoteFileId!: string | null;
+
+  @ApiPropertyOptional({ example: 'export_job_123.zip', nullable: true })
+  remoteFileName!: string | null;
+
+  @ApiPropertyOptional({
+    example: 'https://drive.google.com/file/d/1AbCdEfGhIjKlMnOp/view',
+    nullable: true,
+  })
+  remoteFileUrl!: string | null;
+
+  @ApiPropertyOptional({ example: null, nullable: true })
+  errorMessage!: string | null;
+}
 
 export class ExportJobResponseDataDto {
   @ApiProperty({ example: 'export_job_123' })
@@ -42,6 +73,22 @@ export class ExportJobResponseDataDto {
 
   @ApiPropertyOptional({ example: 987654, nullable: true })
   artifactSizeBytes!: number | null;
+
+  @ApiProperty({ type: () => ExportArtifactDeliveryTargetDto, isArray: true })
+  deliveryTargets!: ExportArtifactDeliveryTargetDto[];
+
+  @ApiProperty({
+    enum: EXPORT_ARTIFACT_DELIVERY_STATUS_VALUES,
+    enumName: 'ExportArtifactDeliveryStatus',
+    example: 'delivered',
+  })
+  deliveryStatus!: (typeof EXPORT_ARTIFACT_DELIVERY_STATUS_VALUES)[number];
+
+  @ApiProperty({
+    type: () => ExportArtifactDeliveryResultDto,
+    isArray: true,
+  })
+  deliveryResults!: ExportArtifactDeliveryResultDto[];
 
   @ApiPropertyOptional({
     example:

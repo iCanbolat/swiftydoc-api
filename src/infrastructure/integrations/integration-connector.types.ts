@@ -8,6 +8,14 @@ import type {
 } from '../../common/integrations/integration-types';
 import type { IntegrationSyncPayload } from '../../common/integrations/integration-sync-payload';
 
+export interface IntegrationArtifact {
+  body: Buffer;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  storageKey?: string;
+}
+
 export interface IntegrationConnectorContext {
   connectionId: string;
   organizationId: string;
@@ -17,6 +25,7 @@ export interface IntegrationConnectorContext {
   targetResourceType?: string | null;
   targetResourceId?: string | null;
   externalReference?: IntegrationExternalReferenceRecord | null;
+  artifact?: IntegrationArtifact;
 }
 
 export interface IntegrationConnectionTestResult {

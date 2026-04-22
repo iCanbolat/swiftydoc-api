@@ -1,4 +1,8 @@
-export const INTEGRATION_SYNC_DOMAIN_VALUES = ['accounting', 'erp'] as const;
+export const INTEGRATION_SYNC_DOMAIN_VALUES = [
+  'accounting',
+  'erp',
+  'storage',
+] as const;
 
 export type IntegrationSyncDomain =
   (typeof INTEGRATION_SYNC_DOMAIN_VALUES)[number];
@@ -24,6 +28,7 @@ export const INTEGRATION_SYNC_SOURCE_RESOURCE_VALUES = [
   'request',
   'submission',
   'file_asset',
+  'export_job',
 ] as const;
 
 export type IntegrationSyncSourceResourceType =
@@ -38,6 +43,38 @@ export interface IntegrationSyncSourceReference {
 export interface IntegrationSyncDestinationReference {
   externalId?: string;
   externalReferenceKey?: string;
+  connectionId?: string;
+  driveId?: string;
+  folderId?: string;
+  itemId?: string;
+  path?: string;
+  siteId?: string;
+}
+
+export const STORAGE_SYNC_ENTITY_VALUES = ['export_artifact'] as const;
+
+export type StorageSyncEntityType = (typeof STORAGE_SYNC_ENTITY_VALUES)[number];
+
+export const STORAGE_SYNC_OPERATION_VALUES = ['upload'] as const;
+
+export type StorageSyncOperation =
+  (typeof STORAGE_SYNC_OPERATION_VALUES)[number];
+
+export interface StorageExportArtifactDescriptor {
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  storageKey?: string;
+}
+
+export interface StorageExportSyncPayload extends Record<string, unknown> {
+  domain: 'storage';
+  entityType: StorageSyncEntityType;
+  operation: StorageSyncOperation;
+  source: IntegrationSyncSourceReference;
+  destination?: IntegrationSyncDestinationReference;
+  artifact: StorageExportArtifactDescriptor;
+  metadata?: Record<string, unknown>;
 }
 
 export interface IntegrationSyncAddress {
@@ -131,6 +168,7 @@ export interface AccountingErpSyncPayload extends Record<string, unknown> {
 
 export type IntegrationSyncPayload =
   | AccountingErpSyncPayload
+  | StorageExportSyncPayload
   | Record<string, unknown>;
 
 const ACCOUNTING_ERP_SYNC_ENTITY_SET = new Set<AccountingErpSyncEntityType>(
@@ -139,6 +177,14 @@ const ACCOUNTING_ERP_SYNC_ENTITY_SET = new Set<AccountingErpSyncEntityType>(
 
 const ACCOUNTING_ERP_SYNC_OPERATION_SET = new Set<AccountingErpSyncOperation>(
   ACCOUNTING_ERP_SYNC_OPERATION_VALUES,
+);
+
+const STORAGE_SYNC_ENTITY_SET = new Set<StorageSyncEntityType>(
+  STORAGE_SYNC_ENTITY_VALUES,
+);
+
+const STORAGE_SYNC_OPERATION_SET = new Set<StorageSyncOperation>(
+  STORAGE_SYNC_OPERATION_VALUES,
 );
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -166,5 +212,34 @@ export function isAccountingErpSyncPayload(
     typeof source.resourceType === 'string' &&
     typeof source.resourceId === 'string' &&
     source.resourceId.trim().length > 0
+  );
+}
+
+export function isStorageExportSyncPayload(
+  value: IntegrationSyncPayload | null | undefined,
+): value is StorageExportSyncPayload {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  const source = value.source;
+  const artifact = value.artifact;
+
+  return (
+    value.domain === 'storage' &&
+    STORAGE_SYNC_ENTITY_SET.has(value.entityType as StorageSyncEntityType) &&
+    STORAGE_SYNC_OPERATION_SET.has(value.operation as StorageSyncOperation) &&
+    isRecord(source) &&
+    typeof source.resourceType === 'string' &&
+    typeof source.resourceId === 'string' &&
+    source.resourceId.trim().length > 0 &&
+    isRecord(artifact) &&
+    typeof artifact.fileName === 'string' &&
+    artifact.fileName.trim().length > 0 &&
+    typeof artifact.mimeType === 'string' &&
+    artifact.mimeType.trim().length > 0 &&
+    typeof artifact.sizeBytes === 'number' &&
+    Number.isFinite(artifact.sizeBytes) &&
+    artifact.sizeBytes >= 0
   );
 }

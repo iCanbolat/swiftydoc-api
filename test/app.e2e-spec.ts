@@ -116,6 +116,15 @@ describe('AppController (e2e)', () => {
       .expect(400);
   });
 
+  it('/v1/exports/jobs/:id/delivery/replay (POST) rejects invalid dto payload', () => {
+    return request(app.getHttpServer())
+      .post('/v1/exports/jobs/export_job_123/delivery/replay')
+      .send({
+        failedOnly: false,
+      })
+      .expect(400);
+  });
+
   it('/v1/communications/provider-configs (PUT) rejects invalid dto payload', () => {
     return request(app.getHttpServer())
       .put('/v1/communications/provider-configs')
@@ -186,6 +195,9 @@ describe('AppController (e2e)', () => {
         expect(body.paths['/v1/reviews/{itemId}/comments']).toBeDefined();
         expect(body.paths['/v1/exports/jobs']).toBeDefined();
         expect(body.paths['/v1/exports/jobs/{id}']).toBeDefined();
+        expect(
+          body.paths['/v1/exports/jobs/{id}/delivery/replay'],
+        ).toBeDefined();
         expect(body.paths['/v1/communications/provider-configs']).toBeDefined();
         expect(body.paths['/v1/communications/branding']).toBeDefined();
         expect(
@@ -194,8 +206,12 @@ describe('AppController (e2e)', () => {
         expect(body.paths['/v1/integrations/providers']).toBeDefined();
         expect(body.paths['/v1/integrations/connections']).toBeDefined();
         expect(body.paths['/v1/integrations/connections/{id}']).toBeDefined();
-        expect(body.paths['/v1/integrations/connections/{id}/test']).toBeDefined();
-        expect(body.paths['/v1/integrations/connections/{id}/sync']).toBeDefined();
+        expect(
+          body.paths['/v1/integrations/connections/{id}/test'],
+        ).toBeDefined();
+        expect(
+          body.paths['/v1/integrations/connections/{id}/sync'],
+        ).toBeDefined();
         expect(body.paths['/v1/sync-jobs']).toBeDefined();
 
         const eventTypeEnum =
@@ -226,6 +242,10 @@ describe('AppController (e2e)', () => {
         const exportStatusEnum =
           body.components.schemas.ExportJobResponseDataDto.properties.status
             .enum ?? body.components.schemas.ExportJobStatus?.enum;
+        const exportDeliveryStatusEnum =
+          body.components.schemas.ExportJobResponseDataDto.properties
+            .deliveryStatus.enum ??
+          body.components.schemas.ExportArtifactDeliveryStatus?.enum;
         const reminderChannelEnum =
           body.components.schemas.SendRequestReminderDto.properties.channel
             .enum ?? body.components.schemas.ReminderChannel?.enum;
@@ -240,10 +260,22 @@ describe('AppController (e2e)', () => {
           body.components.schemas.CreateIntegrationConnectionDto.properties
             .authType.enum ?? body.components.schemas.IntegrationAuthType?.enum;
         const syncJobStatusEnum =
-          body.components.schemas.TriggerSyncJobResponseDataDto.properties.status
-            .enum ?? body.components.schemas.SyncJobStatus?.enum;
+          body.components.schemas.TriggerSyncJobResponseDataDto.properties
+            .status.enum ?? body.components.schemas.SyncJobStatus?.enum;
         const triggerSyncPayloadExample =
           body.components.schemas.TriggerSyncJobDto.properties.payload.example;
+        const createExportDeliveryTargetsExample =
+          body.components.schemas.CreateExportJobDto.properties.deliveryTargets
+            .example;
+        const exportJobMetadataExample =
+          body.components.schemas.CreateExportJobDto.properties.metadata
+            .example;
+        const replayExportDeliveryFailedOnlyDefault =
+          body.components.schemas.ReplayExportDeliveryDto.properties.failedOnly
+            .default;
+        const exportJobResponseDeliveryTargets =
+          body.components.schemas.ExportJobResponseDataDto.properties
+            .deliveryTargets;
 
         expect(eventTypeEnum).toContain('file.uploaded');
         expect(eventTypeEnum).toContain('request.viewed');
@@ -258,16 +290,26 @@ describe('AppController (e2e)', () => {
         expect(commentAuthorTypeEnum).toContain('reviewer');
         expect(exportTypeEnum).toContain('zip');
         expect(exportStatusEnum).toContain('processing');
+        expect(exportDeliveryStatusEnum).toContain('delivered');
         expect(reminderChannelEnum).toContain('whatsapp');
         expect(reminderProviderEnum).toContain('resend');
         expect(integrationProviderEnum).toContain('whatsapp_cloud_api');
         expect(integrationProviderEnum).toContain('plivo');
         expect(integrationProviderEnum).toContain('resend');
         expect(integrationProviderEnum).toContain('zoho_books');
+        expect(integrationProviderEnum).toContain('google_drive');
+        expect(integrationProviderEnum).toContain('onedrive_sharepoint');
         expect(integrationAuthTypeEnum).toContain('bearer_token');
+        expect(integrationAuthTypeEnum).toContain('oauth2');
         expect(syncJobStatusEnum).toContain('succeeded');
-        expect(triggerSyncPayloadExample.domain).toBe('accounting');
-        expect(triggerSyncPayloadExample.entityType).toBe('customer');
+        expect(triggerSyncPayloadExample.domain).toBe('storage');
+        expect(triggerSyncPayloadExample.entityType).toBe('export_artifact');
+        expect(createExportDeliveryTargetsExample[0].connectionId).toBe(
+          'integration_connection_drive_123',
+        );
+        expect(exportJobMetadataExample.deliveryTargets).toBeUndefined();
+        expect(replayExportDeliveryFailedOnlyDefault).toBe(true);
+        expect(exportJobResponseDeliveryTargets.type).toBe('array');
       });
   });
 

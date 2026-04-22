@@ -67,6 +67,25 @@ export const runtimeEnvSchema = z
       .default('https://www.zohoapis.com/books/v3'),
     ZOHO_BOOKS_ACCESS_TOKEN: z.string().min(1).optional(),
     ZOHO_BOOKS_ORGANIZATION_ID: z.string().min(1).optional(),
+    ODOO_API_BASE_URL: z.string().url().optional(),
+    ODOO_DATABASE: z.string().min(1).optional(),
+    ODOO_USERNAME: z.string().min(1).optional(),
+    ODOO_PASSWORD: z.string().min(1).optional(),
+    ODOO_API_KEY: z.string().min(1).optional(),
+    GOOGLE_DRIVE_API_BASE_URL: z
+      .string()
+      .url()
+      .default('https://www.googleapis.com/drive/v3'),
+    GOOGLE_DRIVE_ACCESS_TOKEN: z.string().min(1).optional(),
+    GOOGLE_DRIVE_FOLDER_ID: z.string().min(1).optional(),
+    ONEDRIVE_SHAREPOINT_GRAPH_BASE_URL: z
+      .string()
+      .url()
+      .default('https://graph.microsoft.com/v1.0'),
+    ONEDRIVE_SHAREPOINT_ACCESS_TOKEN: z.string().min(1).optional(),
+    ONEDRIVE_SHAREPOINT_DRIVE_ID: z.string().min(1).optional(),
+    ONEDRIVE_SHAREPOINT_SITE_ID: z.string().min(1).optional(),
+    ONEDRIVE_SHAREPOINT_ITEM_ID: z.string().min(1).optional(),
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV !== 'test' && !env.DATABASE_URL) {

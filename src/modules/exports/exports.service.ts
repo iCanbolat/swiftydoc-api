@@ -26,11 +26,17 @@ import {
 } from '../../infrastructure/database/schema';
 import { JobQueueService } from '../../infrastructure/queue/job-queue.service';
 import { StorageService } from '../../infrastructure/storage/storage.service';
+import { IntegrationsService } from '../integrations/integrations.service';
 import type {
   CreateExportJobInput,
+  ExportArtifactDeliveryResult,
+  ExportArtifactDeliveryStatus,
+  ExportArtifactDeliveryTarget,
   ExportGenerationJobPayload,
+  ExportJobMetadata,
   FileAssetExportRow,
   GeneratedArtifact,
+  ReplayExportDeliveryInput,
 } from './exports.types';
 
 @Injectable()
@@ -40,6 +46,7 @@ export class ExportsService implements OnModuleInit {
     private readonly databaseService: DatabaseService,
     private readonly jobQueueService: JobQueueService,
     private readonly storageService: StorageService,
+    private readonly integrationsService: IntegrationsService,
   ) {}
 
   onModuleInit(): void {
@@ -57,9 +64,14 @@ export class ExportsService implements OnModuleInit {
     const db = this.getDatabase();
     const now = new Date();
     const exportJobId = randomUUID();
-    const metadata = {
+    const deliveryTargets =
+      input.deliveryTargets && input.deliveryTargets.length > 0
+        ? this.normalizeDeliveryTargets(input.deliveryTargets)
+        : this.getDeliveryTargets(input.metadata ?? {});
+    const metadata: ExportJobMetadata = {
       includeFiles: input.includeFiles ?? true,
       ...(input.metadata ?? {}),
+      deliveryTargets,
     };
 
     try {
@@ -116,6 +128,7 @@ export class ExportsService implements OnModuleInit {
       status: 'queued' as const,
       requestId: input.requestId ?? null,
       submissionId: input.submissionId ?? null,
+      deliveryTargets,
       queueJobId,
       createdAt: now.toISOString(),
     };
@@ -140,6 +153,118 @@ export class ExportsService implements OnModuleInit {
     }
 
     return exportJob;
+  }
+
+  async replayExportDelivery(
+    exportJobId: string,
+    input: ReplayExportDeliveryInput,
+  ) {
+    const exportJob = await this.getExportJob(
+      exportJobId,
+      input.organizationId,
+    );
+
+    if (exportJob.status !== 'completed' || !exportJob.artifactStorageKey) {
+      throw new BadRequestException(
+        'Only completed export jobs with a stored artifact can replay delivery.',
+      );
+    }
+
+    const metadata = exportJob.metadata as ExportJobMetadata;
+    const deliveryTargets = this.getDeliveryTargets(metadata);
+
+    if (deliveryTargets.length === 0) {
+      throw new BadRequestException(
+        'This export job does not have configured delivery targets.',
+      );
+    }
+
+    const existingResults = this.getDeliveryResults(metadata);
+    const replayTargets = this.selectReplayTargets(
+      deliveryTargets,
+      existingResults,
+      input,
+    );
+
+    if (replayTargets.length === 0) {
+      throw new BadRequestException(
+        'No export delivery targets matched the replay criteria.',
+      );
+    }
+
+    const storedObject = await this.storageService.getObject(
+      exportJob.artifactStorageKey,
+    );
+
+    if (!storedObject) {
+      throw new ServiceUnavailableException(
+        'Stored export artifact could not be loaded for delivery replay.',
+      );
+    }
+
+    const artifact = this.buildGeneratedArtifactForReplay(
+      exportJob,
+      storedObject,
+    );
+    const replayedResults = await this.deliverArtifactToTargets(
+      exportJob,
+      {
+        contentType: exportJob.artifactMimeType ?? artifact.mimeType,
+        sizeBytes: exportJob.artifactSizeBytes ?? storedObject.sizeBytes,
+        storageKey: exportJob.artifactStorageKey,
+      },
+      artifact,
+      replayTargets,
+    );
+    const mergedResults = this.mergeDeliveryResults(
+      deliveryTargets,
+      existingResults,
+      replayedResults,
+    );
+    const deliveryStatus = this.resolveDeliveryStatus(
+      deliveryTargets,
+      mergedResults,
+    );
+    const replayedAt = new Date();
+    const nextMetadata: ExportJobMetadata = {
+      ...metadata,
+      deliveryTargets,
+      deliveryResults: mergedResults,
+      deliveryStatus,
+      deliveryReplayCount:
+        (typeof metadata.deliveryReplayCount === 'number'
+          ? metadata.deliveryReplayCount
+          : 0) + 1,
+      lastDeliveryReplayAt: replayedAt.toISOString(),
+    };
+    const db = this.getDatabase();
+    const [updatedExportJob] = await db
+      .update(exportJobs)
+      .set({
+        completedAt: replayedAt,
+        errorMessage: null,
+        metadata: nextMetadata,
+      })
+      .where(eq(exportJobs.id, exportJob.id))
+      .returning();
+
+    await this.auditLogService.record({
+      category: 'data_access',
+      action: AUDIT_ACTIONS.data_access.exportJobDeliveryReplayed,
+      organizationId: exportJob.organizationId,
+      actorId: input.actorUserId,
+      actorType: input.actorUserId ? 'user' : undefined,
+      resourceType: RESOURCE_TYPES.automation.exportJob,
+      resourceId: exportJob.id,
+      metadata: {
+        deliveryStatus,
+        failedOnly: input.connectionIds ? false : (input.failedOnly ?? true),
+        replayedTargetCount: replayTargets.length,
+        selectedConnectionIds: input.connectionIds ?? null,
+      },
+    });
+
+    return updatedExportJob;
   }
 
   createDownloadLink(storageKey: string, baseUrl: string): string {
@@ -200,6 +325,23 @@ export class ExportsService implements OnModuleInit {
       });
 
       const completedAt = new Date();
+      const deliveryTargets = this.getDeliveryTargets(exportJob.metadata);
+      const deliveryResults = await this.deliverArtifactToTargets(
+        exportJob,
+        storedArtifact,
+        artifact,
+        deliveryTargets,
+      );
+      const deliveryStatus = this.resolveDeliveryStatus(
+        deliveryTargets,
+        deliveryResults,
+      );
+      const nextMetadata: ExportJobMetadata = {
+        ...(exportJob.metadata as ExportJobMetadata),
+        deliveryResults,
+        deliveryStatus,
+        deliveryTargets,
+      };
 
       await db
         .update(exportJobs)
@@ -210,6 +352,7 @@ export class ExportsService implements OnModuleInit {
           artifactSizeBytes: storedArtifact.sizeBytes,
           completedAt,
           errorMessage: null,
+          metadata: nextMetadata,
         })
         .where(eq(exportJobs.id, exportJob.id));
 
@@ -220,6 +363,10 @@ export class ExportsService implements OnModuleInit {
         resourceType: RESOURCE_TYPES.automation.exportJob,
         resourceId: exportJob.id,
         metadata: {
+          deliveredTargetCount: deliveryResults.filter(
+            (result) => result.status === 'delivered',
+          ).length,
+          deliveryStatus,
           exportType: exportJob.type,
           storageKey: storedArtifact.storageKey,
           sizeBytes: storedArtifact.sizeBytes,
@@ -665,5 +812,310 @@ export class ExportsService implements OnModuleInit {
       typeof error.code === 'string' &&
       error.code === '23503'
     );
+  }
+
+  private getDeliveryTargets(
+    metadata: Record<string, unknown>,
+  ): ExportArtifactDeliveryTarget[] {
+    const rawTargets = metadata.deliveryTargets;
+
+    if (!Array.isArray(rawTargets)) {
+      return [];
+    }
+
+    return rawTargets
+      .filter((target): target is Record<string, unknown> => {
+        return (
+          typeof target === 'object' &&
+          target !== null &&
+          !Array.isArray(target)
+        );
+      })
+      .map((target) => ({
+        connectionId: this.readString(target, 'connectionId') ?? '',
+        driveId: this.readString(target, 'driveId'),
+        fileName: this.readString(target, 'fileName'),
+        folderId: this.readString(target, 'folderId'),
+        itemId: this.readString(target, 'itemId'),
+        path: this.readString(target, 'path'),
+        siteId: this.readString(target, 'siteId'),
+      }))
+      .filter((target) => target.connectionId.length > 0);
+  }
+
+  private getDeliveryResults(
+    metadata: Record<string, unknown>,
+  ): ExportArtifactDeliveryResult[] {
+    const rawResults = metadata.deliveryResults;
+
+    if (!Array.isArray(rawResults)) {
+      return [];
+    }
+
+    return rawResults.filter(
+      (result): result is ExportArtifactDeliveryResult =>
+        typeof result === 'object' && result !== null && !Array.isArray(result),
+    );
+  }
+
+  private normalizeDeliveryTargets(
+    targets: ExportArtifactDeliveryTarget[],
+  ): ExportArtifactDeliveryTarget[] {
+    return targets
+      .map((target) => ({
+        connectionId: target.connectionId.trim(),
+        driveId: this.normalizeOptionalString(target.driveId),
+        fileName: this.normalizeOptionalString(target.fileName),
+        folderId: this.normalizeOptionalString(target.folderId),
+        itemId: this.normalizeOptionalString(target.itemId),
+        path: this.normalizeOptionalString(target.path),
+        siteId: this.normalizeOptionalString(target.siteId),
+      }))
+      .filter((target) => target.connectionId.length > 0);
+  }
+
+  private selectReplayTargets(
+    targets: ExportArtifactDeliveryTarget[],
+    results: ExportArtifactDeliveryResult[],
+    input: ReplayExportDeliveryInput,
+  ): ExportArtifactDeliveryTarget[] {
+    const selectedConnectionIds = new Set(
+      (input.connectionIds ?? [])
+        .map((connectionId) => connectionId.trim())
+        .filter((connectionId) => connectionId.length > 0),
+    );
+
+    if (selectedConnectionIds.size > 0) {
+      return targets.filter((target) =>
+        selectedConnectionIds.has(target.connectionId),
+      );
+    }
+
+    if ((input.failedOnly ?? true) === false) {
+      return targets;
+    }
+
+    if (results.length === 0) {
+      return targets;
+    }
+
+    const failedConnectionIds = new Set(
+      results
+        .filter((result) => result.status === 'failed')
+        .map((result) => result.connectionId),
+    );
+
+    return targets.filter((target) =>
+      failedConnectionIds.has(target.connectionId),
+    );
+  }
+
+  private mergeDeliveryResults(
+    targets: ExportArtifactDeliveryTarget[],
+    existingResults: ExportArtifactDeliveryResult[],
+    replayedResults: ExportArtifactDeliveryResult[],
+  ): ExportArtifactDeliveryResult[] {
+    const resultsByConnectionId = new Map(
+      existingResults.map((result) => [result.connectionId, result] as const),
+    );
+
+    for (const result of replayedResults) {
+      resultsByConnectionId.set(result.connectionId, result);
+    }
+
+    const targetConnectionIds = new Set(
+      targets.map((target) => target.connectionId),
+    );
+    const orderedResults = targets
+      .map((target) => resultsByConnectionId.get(target.connectionId))
+      .filter(
+        (result): result is ExportArtifactDeliveryResult =>
+          result !== undefined,
+      );
+    const nonTargetResults = [...resultsByConnectionId.entries()]
+      .filter(([connectionId]) => !targetConnectionIds.has(connectionId))
+      .map(([, result]) => result);
+
+    return [...orderedResults, ...nonTargetResults];
+  }
+
+  private buildGeneratedArtifactForReplay(
+    exportJob: typeof exportJobs.$inferSelect,
+    storedObject: { body: Buffer },
+  ): GeneratedArtifact {
+    switch (exportJob.type) {
+      case 'zip':
+        return {
+          buffer: storedObject.body,
+          extension: 'zip',
+          mimeType: 'application/zip',
+        };
+      case 'pdf_summary':
+        return {
+          buffer: storedObject.body,
+          extension: 'pdf',
+          mimeType: 'application/pdf',
+        };
+      case 'csv_metadata':
+        return {
+          buffer: storedObject.body,
+          extension: 'csv',
+          mimeType: 'text/csv',
+        };
+      default:
+        throw new BadRequestException(
+          `Unsupported export job type ${exportJob.type}.`,
+        );
+    }
+  }
+
+  private async deliverArtifactToTargets(
+    exportJob: typeof exportJobs.$inferSelect,
+    storedArtifact: {
+      contentType: string;
+      sizeBytes: number;
+      storageKey: string;
+    },
+    artifact: GeneratedArtifact,
+    targets: ExportArtifactDeliveryTarget[],
+  ): Promise<ExportArtifactDeliveryResult[]> {
+    const results: ExportArtifactDeliveryResult[] = [];
+    const defaultFileName = this.buildArtifactFileName(
+      exportJob,
+      artifact.extension,
+    );
+
+    for (const target of targets) {
+      const deliveredAt = new Date().toISOString();
+
+      try {
+        const execution = await this.integrationsService.executeSyncNow(
+          target.connectionId,
+          {
+            organizationId: exportJob.organizationId,
+            targetResourceType: 'export_job',
+            targetResourceId: exportJob.id,
+            payload: {
+              domain: 'storage',
+              entityType: 'export_artifact',
+              operation: 'upload',
+              source: {
+                resourceType: 'export_job',
+                resourceId: exportJob.id,
+                displayName: `Export ${exportJob.id}`,
+              },
+              destination: {
+                connectionId: target.connectionId,
+                driveId: target.driveId,
+                folderId: target.folderId,
+                itemId: target.itemId,
+                path: target.path,
+                siteId: target.siteId,
+              },
+              artifact: {
+                fileName: target.fileName ?? defaultFileName,
+                mimeType: storedArtifact.contentType,
+                sizeBytes: storedArtifact.sizeBytes,
+                storageKey: storedArtifact.storageKey,
+              },
+              metadata: {
+                exportType: exportJob.type,
+              },
+            },
+            artifact: {
+              body: artifact.buffer,
+              fileName: target.fileName ?? defaultFileName,
+              mimeType: storedArtifact.contentType,
+              sizeBytes: storedArtifact.sizeBytes,
+              storageKey: storedArtifact.storageKey,
+            },
+          },
+        );
+
+        results.push({
+          connectionId: target.connectionId,
+          deliveredAt,
+          providerKey: execution.connection.providerKey,
+          remoteFileId:
+            this.readString(execution.result.metadata, 'remoteFileId') ??
+            execution.externalReference?.externalId ??
+            null,
+          remoteFileName:
+            this.readString(execution.result.metadata, 'remoteFileName') ??
+            null,
+          remoteFileUrl:
+            this.readString(execution.result.metadata, 'remoteFileUrl') ?? null,
+          status: 'delivered',
+        });
+      } catch (error) {
+        results.push({
+          connectionId: target.connectionId,
+          deliveredAt,
+          errorMessage:
+            error instanceof Error
+              ? error.message
+              : 'Unknown export delivery error',
+          providerKey: 'unknown',
+          status: 'failed',
+        });
+      }
+    }
+
+    return results;
+  }
+
+  private resolveDeliveryStatus(
+    targets: ExportArtifactDeliveryTarget[],
+    results: ExportArtifactDeliveryResult[],
+  ): ExportArtifactDeliveryStatus {
+    if (targets.length === 0) {
+      return 'not_configured';
+    }
+
+    const deliveredCount = results.filter(
+      (result) => result.status === 'delivered',
+    ).length;
+
+    if (deliveredCount === 0) {
+      return 'failed';
+    }
+
+    if (deliveredCount === results.length) {
+      return 'delivered';
+    }
+
+    return 'partial_failure';
+  }
+
+  private buildArtifactFileName(
+    exportJob: typeof exportJobs.$inferSelect,
+    extension: GeneratedArtifact['extension'],
+  ): string {
+    return `${exportJob.id}.${extension}`;
+  }
+
+  private readString(
+    source: Record<string, unknown>,
+    key: string,
+  ): string | undefined {
+    const value = source[key];
+
+    if (typeof value !== 'string') {
+      return undefined;
+    }
+
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }
+
+  private normalizeOptionalString(
+    value: string | undefined,
+  ): string | undefined {
+    if (typeof value !== 'string') {
+      return undefined;
+    }
+
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
   }
 }

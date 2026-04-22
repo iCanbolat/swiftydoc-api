@@ -32,34 +32,25 @@ export class TriggerSyncJobDto {
     type: 'object',
     additionalProperties: true,
     description:
-      'Generic integration sync payload. Accounting/ERP providers currently accept an upsert envelope for entities such as customer, vendor, invoice, and sales_order.',
+      'Generic integration sync payload. Accounting/ERP providers accept an upsert envelope; storage providers accept an export artifact upload envelope.',
     example: {
-      domain: 'accounting',
-      entityType: 'customer',
-      operation: 'upsert',
+      domain: 'storage',
+      entityType: 'export_artifact',
+      operation: 'upload',
       source: {
-        resourceType: 'client',
-        resourceId: 'client_123',
-        displayName: 'Acme Clinic',
+        resourceType: 'export_job',
+        resourceId: 'export_job_123',
+        displayName: 'Request Export',
       },
-      customer: {
-        displayName: 'Acme Clinic',
-        companyName: 'Acme Clinic LLC',
-        email: 'billing@acme.test',
-        phone: '+971500000000',
-        currencyCode: 'AED',
-        billingAddress: {
-          addressLine1: 'Dubai Healthcare City',
-          city: 'Dubai',
-          countryCode: 'AE',
-        },
-        contactPersons: [
-          {
-            firstName: 'Ayla',
-            lastName: 'Demir',
-            email: 'billing@acme.test',
-          },
-        ],
+      destination: {
+        connectionId: 'integration_connection_drive_123',
+        folderId: 'drive_folder_abc',
+      },
+      artifact: {
+        fileName: 'request-export.zip',
+        mimeType: 'application/zip',
+        sizeBytes: 987654,
+        storageKey: 'org_123/exports/2026-04-22/export_job_123.zip',
       },
     },
   })

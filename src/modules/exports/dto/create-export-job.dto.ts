@@ -1,5 +1,7 @@
+import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
+  IsArray,
   IsBoolean,
   IsIn,
   IsNotEmpty,
@@ -7,11 +9,13 @@ import {
   IsOptional,
   IsString,
   MaxLength,
+  ValidateNested,
 } from 'class-validator';
 import {
   EXPORT_JOB_TYPE_VALUES,
   type ExportJobType,
 } from '../../../common/exports/export-types';
+import { ExportArtifactDeliveryTargetDto } from './export-artifact-delivery-target.dto';
 
 export class CreateExportJobDto {
   @ApiProperty({ example: 'org_123', maxLength: 120 })
@@ -57,10 +61,33 @@ export class CreateExportJobDto {
   includeFiles?: boolean;
 
   @ApiPropertyOptional({
+    type: () => ExportArtifactDeliveryTargetDto,
+    isArray: true,
+    example: [
+      {
+        connectionId: 'integration_connection_drive_123',
+        fileName: 'request-export.zip',
+        folderId: 'drive_folder_abc',
+      },
+      {
+        connectionId: 'integration_connection_onedrive_123',
+        itemId: '01ABCDEF1234567890',
+        path: 'SwiftyDoc/Exports',
+      },
+    ],
+  })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ExportArtifactDeliveryTargetDto)
+  deliveryTargets?: ExportArtifactDeliveryTargetDto[];
+
+  @ApiPropertyOptional({
     type: 'object',
     additionalProperties: true,
     example: {
       locale: 'en',
+      initiatedFrom: 'ops_dashboard',
     },
   })
   @IsOptional()
