@@ -1,15 +1,21 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsIn, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
-import { SYNC_JOB_STATUS_VALUES, type SyncJobStatus } from '../../../common/integrations/integration-types';
+import {
+  IsIn,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  MaxLength,
+} from 'class-validator';
+import {
+  SYNC_JOB_STATUS_VALUES,
+  type SyncJobStatus,
+} from '../../../common/integrations/integration-types';
 
 export class ListSyncJobsQueryDto {
-  @ApiProperty({ example: 'org_123', maxLength: 120 })
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(120)
-  organizationId!: string;
-
-  @ApiPropertyOptional({ example: 'integration_connection_123', maxLength: 120 })
+  @ApiPropertyOptional({
+    example: 'integration_connection_123',
+    maxLength: 120,
+  })
   @IsOptional()
   @IsString()
   @IsNotEmpty()

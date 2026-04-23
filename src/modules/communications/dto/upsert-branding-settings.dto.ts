@@ -11,19 +11,6 @@ import {
 } from 'class-validator';
 
 export class UpsertBrandingSettingsDto {
-  @ApiProperty({ example: 'org_123', maxLength: 120 })
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(120)
-  organizationId!: string;
-
-  @ApiPropertyOptional({ example: 'user_123', maxLength: 120 })
-  @IsOptional()
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(120)
-  actorUserId?: string;
-
   @ApiProperty({ example: 'SwiftyDoc' })
   @IsString()
   @IsNotEmpty()

@@ -14,6 +14,7 @@ export const RESOURCE_TYPES = {
   },
   documents: {
     answer: 'answer',
+    client: 'client',
     comment: 'comment',
     fileAsset: 'file_asset',
     portalLink: 'portal_link',
@@ -27,14 +28,18 @@ export const RESOURCE_TYPES = {
   },
   identity: {
     auditEvent: 'audit_event',
+    authIdentity: 'auth_identity',
     brandingSettings: 'branding_settings',
     emailTemplateVariant: 'email_template_variant',
+    mfaFactor: 'mfa_factor',
     oauthApplication: 'oauth_application',
     oauthGrant: 'oauth_grant',
     organization: 'organization',
     permission: 'permission',
+    refreshToken: 'refresh_token',
     role: 'role',
     user: 'user',
+    userSession: 'user_session',
     workspace: 'workspace',
   },
 } as const;

@@ -78,6 +78,20 @@ export const oauthGrantStatusEnum = pgEnum('oauth_grant_status', [
   'revoked',
 ]);
 
+export const authIdentityProviderEnum = pgEnum('auth_identity_provider', [
+  'password',
+  'google_oidc',
+  'microsoft_oidc',
+  'saml',
+]);
+
+export const mfaFactorTypeEnum = pgEnum('mfa_factor_type', [
+  'totp',
+  'email_otp',
+  'sms_otp',
+  'webauthn',
+]);
+
 export const webhookDeliveryStatusEnum = pgEnum(
   'webhook_delivery_status',
   WEBHOOK_DELIVERY_STATUS_VALUES,
@@ -426,6 +440,172 @@ export const oauthGrants = pgTable('oauth_grants', {
     .notNull()
     .defaultNow(),
 });
+
+export const authIdentities = pgTable(
+  'auth_identities',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    provider: authIdentityProviderEnum('provider').notNull(),
+    providerSubject: varchar('provider_subject', { length: 255 }).notNull(),
+    passwordHash: text('password_hash'),
+    emailVerifiedAt: timestamp('email_verified_at', { withTimezone: true }),
+    lastAuthenticatedAt: timestamp('last_authenticated_at', {
+      withTimezone: true,
+    }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('auth_identities_provider_subject_key').on(
+      table.provider,
+      table.providerSubject,
+    ),
+    uniqueIndex('auth_identities_user_provider_key').on(
+      table.userId,
+      table.provider,
+    ),
+  ],
+);
+
+export const userSessions = pgTable(
+  'user_sessions',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    activeWorkspaceId: text('active_workspace_id').references(
+      () => workspaces.id,
+      { onDelete: 'set null' },
+    ),
+    accessTokenHash: text('access_token_hash').notNull(),
+    ipAddress: varchar('ip_address', { length: 64 }),
+    userAgent: varchar('user_agent', { length: 500 }),
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('user_sessions_access_token_hash_key').on(
+      table.accessTokenHash,
+    ),
+    index('user_sessions_user_org_idx').on(table.userId, table.organizationId),
+    index('user_sessions_org_revoked_idx').on(
+      table.organizationId,
+      table.revokedAt,
+    ),
+  ],
+);
+
+export const refreshTokens = pgTable(
+  'refresh_tokens',
+  {
+    id: text('id').primaryKey(),
+    sessionId: text('session_id')
+      .notNull()
+      .references(() => userSessions.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    tokenHash: text('token_hash').notNull(),
+    familyId: text('family_id').notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    consumedAt: timestamp('consumed_at', { withTimezone: true }),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    replacedByTokenId: text('replaced_by_token_id'),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('refresh_tokens_token_hash_key').on(table.tokenHash),
+    index('refresh_tokens_session_idx').on(table.sessionId),
+    index('refresh_tokens_user_revoked_idx').on(table.userId, table.revokedAt),
+  ],
+);
+
+export const passwordResetTokens = pgTable(
+  'password_reset_tokens',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    tokenHash: text('token_hash').notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    consumedAt: timestamp('consumed_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('password_reset_tokens_token_hash_key').on(table.tokenHash),
+    index('password_reset_tokens_user_idx').on(table.userId),
+  ],
+);
+
+export const emailVerificationTokens = pgTable(
+  'email_verification_tokens',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    tokenHash: text('token_hash').notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    consumedAt: timestamp('consumed_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('email_verification_tokens_token_hash_key').on(table.tokenHash),
+    index('email_verification_tokens_user_idx').on(table.userId),
+  ],
+);
+
+export const mfaFactors = pgTable(
+  'mfa_factors',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    organizationId: text('organization_id').references(() => organizations.id, {
+      onDelete: 'cascade',
+    }),
+    factorType: mfaFactorTypeEnum('factor_type').notNull(),
+    label: varchar('label', { length: 120 }),
+    secretCiphertext: text('secret_ciphertext'),
+    verifiedAt: timestamp('verified_at', { withTimezone: true }),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index('mfa_factors_user_idx').on(table.userId),
+    index('mfa_factors_org_idx').on(table.organizationId),
+  ],
+);
 
 export const webhookEndpoints = pgTable(
   'webhook_endpoints',

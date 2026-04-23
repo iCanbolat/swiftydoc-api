@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AuthModule } from '../auth/auth.module';
 import { GoogleDriveIntegrationConnector } from '../../infrastructure/integrations/google-drive-integration.connector';
 import { OdooIntegrationConnector } from '../../infrastructure/integrations/odoo-integration.connector';
 import { OneDriveSharePointIntegrationConnector } from '../../infrastructure/integrations/onedrive-sharepoint-integration.connector';
@@ -13,6 +14,7 @@ import {
 import { IntegrationsService } from './integrations.service';
 
 @Module({
+  imports: [AuthModule],
   controllers: [IntegrationsController, SyncJobsController],
   providers: [
     IntegrationsService,

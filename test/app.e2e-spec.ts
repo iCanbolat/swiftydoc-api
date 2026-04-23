@@ -42,13 +42,34 @@ describe('AppController (e2e)', () => {
       });
   });
 
-  it('/v1/files/upload (POST) rejects invalid dto payload', () => {
+  it('/v1/files/upload (POST) rejects missing bearer token', () => {
     return request(app.getHttpServer())
       .post('/v1/files/upload')
       .send({
         fileName: 'passport.pdf',
       })
-      .expect(400);
+      .expect(401);
+  });
+
+  it('/v1/files/metadata/:id (GET) rejects missing bearer token', () => {
+    return request(app.getHttpServer())
+      .get('/v1/files/metadata/file_123')
+      .expect(401);
+  });
+
+  it('/v1/files/download-link (POST) rejects missing bearer token', () => {
+    return request(app.getHttpServer())
+      .post('/v1/files/download-link')
+      .send({
+        storageKey: 'org_123/2026-04-21/file.pdf',
+      })
+      .expect(401);
+  });
+
+  it('/v1/files/download (GET) rejects missing bearer token', () => {
+    return request(app.getHttpServer())
+      .get('/v1/files/download?key=org_123%2F2026-04-21%2Ffile.pdf')
+      .expect(401);
   });
 
   it('/v1/webhooks/endpoints (POST) rejects unexpected fields', () => {
@@ -75,44 +96,194 @@ describe('AppController (e2e)', () => {
       .expect(400);
   });
 
-  it('/v1/applications (POST) rejects invalid dto payload', () => {
+  it('/v1/applications (POST) rejects missing bearer token', () => {
     return request(app.getHttpServer())
       .post('/v1/applications')
       .send({
-        organizationId: 'org_123',
+        name: 'Partner App',
+      })
+      .expect(401);
+  });
+
+  it('/v1/applications (GET) rejects missing bearer token', () => {
+    return request(app.getHttpServer()).get('/v1/applications').expect(401);
+  });
+
+  it('/v1/clients (GET) rejects missing bearer token', () => {
+    return request(app.getHttpServer()).get('/v1/clients').expect(401);
+  });
+
+  it('/v1/clients (POST) rejects missing bearer token', () => {
+    return request(app.getHttpServer())
+      .post('/v1/clients')
+      .send({
+        workspaceId: 'ws_123',
+        displayName: 'Acme LLC',
+      })
+      .expect(401);
+  });
+
+  it('/v1/clients/:id (GET) rejects missing bearer token', () => {
+    return request(app.getHttpServer())
+      .get('/v1/clients/client_123')
+      .expect(401);
+  });
+
+  it('/v1/clients/:id (PATCH) rejects missing bearer token', () => {
+    return request(app.getHttpServer())
+      .patch('/v1/clients/client_123')
+      .send({
+        displayName: 'Acme Holdings',
+      })
+      .expect(401);
+  });
+
+  it('/v1/templates (GET) rejects missing bearer token', () => {
+    return request(app.getHttpServer()).get('/v1/templates').expect(401);
+  });
+
+  it('/v1/templates (POST) rejects missing bearer token', () => {
+    return request(app.getHttpServer())
+      .post('/v1/templates')
+      .send({
+        workspaceId: 'ws_123',
+        name: 'Onboarding Template',
+        slug: 'onboarding-template',
+      })
+      .expect(401);
+  });
+
+  it('/v1/templates/:id (GET) rejects missing bearer token', () => {
+    return request(app.getHttpServer())
+      .get('/v1/templates/tpl_123')
+      .expect(401);
+  });
+
+  it('/v1/templates/:id (PATCH) rejects missing bearer token', () => {
+    return request(app.getHttpServer())
+      .patch('/v1/templates/tpl_123')
+      .send({
+        name: 'Updated Template',
+      })
+      .expect(401);
+  });
+
+  it('/v1/portal/submissions/:id/answers rejects missing portal token', () => {
+    return request(app.getHttpServer())
+      .patch('/v1/portal/submissions/submission_123/answers')
+      .send({
+        answers: [
+          {
+            submissionItemId: 'submission_item_123',
+            value: { text: 'hello' },
+          },
+        ],
+      })
+      .expect(401);
+  });
+
+  it('/v1/portal/files/upload rejects missing portal token', () => {
+    return request(app.getHttpServer())
+      .post('/v1/portal/files/upload')
+      .send({
+        fileName: 'note.txt',
+        contentBase64: Buffer.from('hello').toString('base64'),
+      })
+      .expect(401);
+  });
+
+  it('/v1/auth/bootstrap-owner (POST) rejects invalid dto payload', () => {
+    return request(app.getHttpServer())
+      .post('/v1/auth/bootstrap-owner')
+      .send({
+        organizationName: 'Acme',
       })
       .expect(400);
   });
 
-  it('/v1/applications (GET) rejects missing query payload', () => {
-    return request(app.getHttpServer()).get('/v1/applications').expect(400);
-  });
-
-  it('/v1/applications/:id (GET) rejects missing query payload', () => {
+  it('/v1/auth/sign-in (POST) rejects invalid dto payload', () => {
     return request(app.getHttpServer())
-      .get('/v1/applications/oauth_app_123')
+      .post('/v1/auth/sign-in')
+      .send({
+        organizationSlug: 'acme',
+      })
       .expect(400);
   });
 
-  it('/v1/applications/:id/rotate-secret (POST) rejects invalid dto payload', () => {
+  it('/v1/auth/refresh (POST) rejects invalid dto payload', () => {
     return request(app.getHttpServer())
-      .post('/v1/applications/oauth_app_123/rotate-secret')
+      .post('/v1/auth/refresh')
       .send({})
       .expect(400);
   });
 
-  it('/v1/requests/:id/send (POST) rejects invalid dto payload', () => {
+  it('/v1/auth/me (GET) rejects missing bearer token', () => {
+    return request(app.getHttpServer()).get('/v1/auth/me').expect(401);
+  });
+
+  it('/v1/auth/sign-out (POST) rejects missing bearer token', () => {
+    return request(app.getHttpServer()).post('/v1/auth/sign-out').expect(401);
+  });
+
+  it('/v1/applications/:id (GET) rejects missing bearer token', () => {
+    return request(app.getHttpServer())
+      .get('/v1/applications/oauth_app_123')
+      .expect(401);
+  });
+
+  it('/v1/applications/:id (PATCH) rejects missing bearer token', () => {
+    return request(app.getHttpServer())
+      .patch('/v1/applications/oauth_app_123')
+      .send({
+        name: 'Renamed App',
+      })
+      .expect(401);
+  });
+
+  it('/v1/applications/:id/rotate-secret (POST) rejects missing bearer token', () => {
+    return request(app.getHttpServer())
+      .post('/v1/applications/oauth_app_123/rotate-secret')
+      .send({
+        reason: 'quarterly rotation',
+      })
+      .expect(401);
+  });
+
+  it('/v1/requests (POST) rejects missing bearer token', () => {
+    return request(app.getHttpServer())
+      .post('/v1/requests')
+      .send({
+        workspaceId: 'ws_123',
+      })
+      .expect(401);
+  });
+
+  it('/v1/requests/:id/send (POST) rejects missing bearer token', () => {
     return request(app.getHttpServer())
       .post('/v1/requests/req_123/send')
       .send({})
-      .expect(400);
+      .expect(401);
   });
 
-  it('/v1/requests/:id/remind (POST) rejects invalid dto payload', () => {
+  it('/v1/requests/:id/remind (POST) rejects missing bearer token', () => {
     return request(app.getHttpServer())
       .post('/v1/requests/req_123/remind')
       .send({})
-      .expect(400);
+      .expect(401);
+  });
+
+  it('/v1/requests/:id/portal-links (POST) rejects missing bearer token', () => {
+    return request(app.getHttpServer())
+      .post('/v1/requests/req_123/portal-links')
+      .send({})
+      .expect(401);
+  });
+
+  it('/v1/submissions/:id/answers (PATCH) rejects missing bearer token', () => {
+    return request(app.getHttpServer())
+      .patch('/v1/submissions/submission_123/answers')
+      .send({})
+      .expect(401);
   });
 
   it('/v1/portal/access (POST) rejects missing token payload', () => {
@@ -124,44 +295,44 @@ describe('AppController (e2e)', () => {
       .expect(400);
   });
 
-  it('/v1/reviews/:itemId/approve (POST) rejects invalid dto payload', () => {
+  it('/v1/reviews/:itemId/approve (POST) rejects missing bearer token', () => {
     return request(app.getHttpServer())
       .post('/v1/reviews/submission_item_123/approve')
       .send({})
-      .expect(400);
+      .expect(401);
   });
 
-  it('/v1/reviews/:itemId/comments (POST) rejects invalid dto payload', () => {
+  it('/v1/reviews/:itemId/comments (POST) rejects missing bearer token', () => {
     return request(app.getHttpServer())
       .post('/v1/reviews/submission_item_123/comments')
       .send({
-        organizationId: 'org_123',
+        body: 'Need another copy.',
       })
-      .expect(400);
+      .expect(401);
   });
 
-  it('/v1/exports/jobs (POST) rejects invalid dto payload', () => {
+  it('/v1/exports/jobs (POST) rejects missing bearer token', () => {
     return request(app.getHttpServer())
       .post('/v1/exports/jobs')
       .send({
-        organizationId: 'org_123',
+        exportType: 'zip',
       })
-      .expect(400);
+      .expect(401);
   });
 
-  it('/v1/exports/jobs/:id (GET) rejects missing query payload', () => {
+  it('/v1/exports/jobs/:id (GET) rejects missing bearer token', () => {
     return request(app.getHttpServer())
       .get('/v1/exports/jobs/export_job_123')
-      .expect(400);
+      .expect(401);
   });
 
-  it('/v1/exports/jobs/:id/delivery/replay (POST) rejects invalid dto payload', () => {
+  it('/v1/exports/jobs/:id/delivery/replay (POST) rejects missing bearer token', () => {
     return request(app.getHttpServer())
       .post('/v1/exports/jobs/export_job_123/delivery/replay')
       .send({
         failedOnly: false,
       })
-      .expect(400);
+      .expect(401);
   });
 
   it('/v1/communications/provider-configs (PUT) rejects invalid dto payload', () => {
@@ -233,8 +404,19 @@ describe('AppController (e2e)', () => {
         expect(body.paths['/v1/webhook-deliveries']).toBeDefined();
         expect(body.paths['/v1/webhook-deliveries/{id}/replay']).toBeDefined();
         expect(body.paths['/v1/applications']).toBeDefined();
+        expect(body.paths['/v1/clients']).toBeDefined();
+        expect(body.paths['/v1/clients/{id}']).toBeDefined();
+        expect(body.paths['/v1/auth/bootstrap-owner']).toBeDefined();
+        expect(body.paths['/v1/auth/sign-in']).toBeDefined();
+        expect(body.paths['/v1/auth/refresh']).toBeDefined();
+        expect(body.paths['/v1/auth/me']).toBeDefined();
+        expect(body.paths['/v1/auth/sign-out']).toBeDefined();
         expect(body.paths['/v1/applications/{id}']).toBeDefined();
         expect(body.paths['/v1/applications/{id}/rotate-secret']).toBeDefined();
+        expect(body.paths['/v1/templates']).toBeDefined();
+        expect(body.paths['/v1/templates/{id}']).toBeDefined();
+        expect(body.paths['/v1/portal/submissions/{id}/answers']).toBeDefined();
+        expect(body.paths['/v1/portal/files/upload']).toBeDefined();
         expect(body.paths['/v1/requests/{id}/send']).toBeDefined();
         expect(body.paths['/v1/requests/{id}/remind']).toBeDefined();
         expect(body.paths['/v1/requests/{id}/portal-links']).toBeDefined();
@@ -281,6 +463,7 @@ describe('AppController (e2e)', () => {
         const oauthApplicationStatusEnum =
           body.components.schemas.OAuthApplicationDataDto.properties.status
             .enum ?? body.components.schemas.OAuthApplicationStatus?.enum;
+        const authBearerScheme = body.components.securitySchemes?.bearer;
         const requestStatusEnum =
           body.components.schemas.CreateRequestResponseDataDto.properties.status
             .enum ?? body.components.schemas.RequestStatus?.enum;
@@ -294,8 +477,9 @@ describe('AppController (e2e)', () => {
           body.components.schemas.ReviewSubmissionItemResponseDataDto.properties
             .decision.enum ?? body.components.schemas.ReviewDecisionType?.enum;
         const commentAuthorTypeEnum =
-          body.components.schemas.CreateSubmissionItemCommentDto.properties
-            .authorType.enum ?? body.components.schemas.CommentAuthorType?.enum;
+          body.components.schemas.CreateSubmissionItemCommentResponseDataDto
+            ?.properties.authorType.enum ??
+          body.components.schemas.CommentAuthorType?.enum;
         const exportTypeEnum =
           body.components.schemas.CreateExportJobDto.properties.exportType
             .enum ?? body.components.schemas.ExportJobType?.enum;
@@ -345,6 +529,7 @@ describe('AppController (e2e)', () => {
         expect(eventTypeEnum).toContain('request.completed');
         expect(eventTypeEnum).toContain('request.overdue');
         expect(eventTypeEnum).toContain('request.reminder_sent');
+        expect(authBearerScheme?.scheme).toBe('bearer');
         expect(subscribedEventsEnum).toContain('*');
         expect(oauthApplicationTypeEnum).toContain('confidential');
         expect(oauthApplicationStatusEnum).toContain('revoked');

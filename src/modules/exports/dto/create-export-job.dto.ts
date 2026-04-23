@@ -18,12 +18,6 @@ import {
 import { ExportArtifactDeliveryTargetDto } from './export-artifact-delivery-target.dto';
 
 export class CreateExportJobDto {
-  @ApiProperty({ example: 'org_123', maxLength: 120 })
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(120)
-  organizationId!: string;
-
   @ApiProperty({
     enum: EXPORT_JOB_TYPE_VALUES,
     enumName: 'ExportJobType',
@@ -47,13 +41,6 @@ export class CreateExportJobDto {
   @IsNotEmpty()
   @MaxLength(120)
   submissionId?: string;
-
-  @ApiPropertyOptional({ example: 'user_123', maxLength: 120 })
-  @IsOptional()
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(120)
-  requestedByUserId?: string;
 
   @ApiPropertyOptional({ example: true, default: true })
   @IsOptional()

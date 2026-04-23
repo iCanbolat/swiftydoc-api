@@ -1,7 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsBase64,
-  IsIn,
   IsMimeType,
   IsNotEmpty,
   IsObject,
@@ -9,8 +8,6 @@ import {
   IsString,
   MaxLength,
 } from 'class-validator';
-
-const UPLOADED_BY_TYPE_VALUES = ['user', 'recipient', 'system'] as const;
 
 export class UploadFileDto {
   @ApiProperty({ example: 'passport.pdf', maxLength: 255 })
@@ -34,12 +31,6 @@ export class UploadFileDto {
   @IsMimeType()
   contentType?: string;
 
-  @ApiProperty({ example: 'org_123', maxLength: 120 })
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(120)
-  organizationId!: string;
-
   @ApiPropertyOptional({ example: 'req_123', maxLength: 120 })
   @IsOptional()
   @IsString()
@@ -60,25 +51,6 @@ export class UploadFileDto {
   @IsNotEmpty()
   @MaxLength(120)
   submissionItemId?: string;
-
-  @ApiPropertyOptional({
-    enum: UPLOADED_BY_TYPE_VALUES,
-    enumName: 'UploadedByType',
-    example: 'user',
-    default: 'system',
-  })
-  @IsOptional()
-  @IsString()
-  @IsNotEmpty()
-  @IsIn(UPLOADED_BY_TYPE_VALUES)
-  uploadedByType?: (typeof UPLOADED_BY_TYPE_VALUES)[number];
-
-  @ApiPropertyOptional({ example: 'user_123', maxLength: 120 })
-  @IsOptional()
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(120)
-  uploadedById?: string;
 
   @ApiPropertyOptional({
     type: 'object',

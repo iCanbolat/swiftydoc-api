@@ -24,13 +24,6 @@ export class EmitWebhookEventDto {
   @MaxLength(120)
   eventType!: WebhookEventType;
 
-  @ApiPropertyOptional({ example: 'org_123' })
-  @IsOptional()
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(120)
-  organizationId?: string;
-
   @ApiPropertyOptional({
     type: 'object',
     additionalProperties: true,

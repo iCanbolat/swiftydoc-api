@@ -8,6 +8,25 @@ export function configureOpenApi(app: INestApplication): void {
       'Foundation API for secure document collection, file workflows and webhook automation.',
     )
     .setVersion('0.1.0')
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'opaque',
+        description: 'Opaque internal access token returned by the auth API.',
+      },
+      'bearer',
+    )
+    .addApiKey(
+      {
+        type: 'apiKey',
+        in: 'header',
+        name: 'Authorization',
+        description:
+          'Portal access token returned by POST /v1/portal/access. Format: Portal <token>.',
+      },
+      'portal',
+    )
     .build();
 
   const document = SwaggerModule.createDocument(app, config);

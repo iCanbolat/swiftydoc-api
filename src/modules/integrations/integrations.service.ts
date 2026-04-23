@@ -25,6 +25,7 @@ import {
   integrationConnections,
   integrationExternalReferences,
   syncJobs,
+  workspaces,
 } from '../../infrastructure/database/schema';
 import type {
   IntegrationConnectionTestResult,
@@ -121,6 +122,13 @@ export class IntegrationsService implements OnModuleInit {
     input: CreateIntegrationConnectionInput,
   ): Promise<IntegrationConnectionRecord> {
     this.assertProviderSupported(input.providerKey);
+
+    if (input.workspaceId) {
+      await this.assertWorkspaceBelongsToOrganization(
+        input.workspaceId,
+        input.organizationId,
+      );
+    }
 
     const authType =
       input.authType ?? this.getDefaultAuthType(input.providerKey);
@@ -859,6 +867,29 @@ export class IntegrationsService implements OnModuleInit {
 
   private isSecretLikeKey(key: string): boolean {
     return /(token|secret|password|apikey|api_key|auth)/i.test(key);
+  }
+
+  private async assertWorkspaceBelongsToOrganization(
+    workspaceId: string,
+    organizationId: string,
+  ): Promise<void> {
+    const db = this.getDatabase();
+    const [workspace] = await db
+      .select({ id: workspaces.id })
+      .from(workspaces)
+      .where(
+        and(
+          eq(workspaces.id, workspaceId),
+          eq(workspaces.organizationId, organizationId),
+        ),
+      )
+      .limit(1);
+
+    if (!workspace) {
+      throw new BadRequestException(
+        'Workspace does not belong to the current organization.',
+      );
+    }
   }
 
   private getDatabase() {

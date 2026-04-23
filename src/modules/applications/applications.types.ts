@@ -32,7 +32,7 @@ export interface OAuthApplicationRecord {
 
 export interface CreateOAuthApplicationInput {
   organizationId: string;
-  actorUserId?: string;
+  actorUserId: string;
   name: string;
   description?: string;
   redirectUris?: string[];
@@ -42,7 +42,7 @@ export interface CreateOAuthApplicationInput {
 
 export interface UpdateOAuthApplicationInput {
   organizationId: string;
-  actorUserId?: string;
+  actorUserId: string;
   name?: string;
   description?: string;
   redirectUris?: string[];
@@ -53,7 +53,7 @@ export interface UpdateOAuthApplicationInput {
 
 export interface RotateOAuthApplicationSecretInput {
   organizationId: string;
-  actorUserId?: string;
+  actorUserId: string;
 }
 
 export interface OAuthApplicationCredentialResult {

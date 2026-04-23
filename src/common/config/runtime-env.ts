@@ -33,6 +33,29 @@ export const runtimeEnvSchema = z
     DATABASE_URL: z.string().min(1).optional(),
     DATABASE_POOL_MAX: numberFromEnv.default(10),
     DATABASE_SSL: booleanFromEnv.default(false),
+    AUTH_BOOTSTRAP_ALLOW_SIGNUP: booleanFromEnv.default(true),
+    INTERNAL_AUTH_ACCESS_TOKEN_TTL_MINUTES: numberFromEnv.default(60),
+    INTERNAL_AUTH_REFRESH_TOKEN_TTL_DAYS: numberFromEnv.default(30),
+    INTERNAL_AUTH_INVITE_TOKEN_TTL_HOURS: numberFromEnv.default(72),
+    INTERNAL_AUTH_INVITE_URL_BASE: z
+      .string()
+      .url()
+      .default('http://localhost:3000/accept-invite'),
+    INTERNAL_AUTH_EMAIL_VERIFICATION_URL_BASE: z
+      .string()
+      .url()
+      .default('http://localhost:3000/verify-email'),
+    INTERNAL_AUTH_PASSWORD_RESET_URL_BASE: z
+      .string()
+      .url()
+      .default('http://localhost:3000/reset-password'),
+    PORTAL_AUTH_TOKEN_TTL_MINUTES: numberFromEnv.default(30),
+    PORTAL_AUTH_TOKEN_SECRET: z
+      .string()
+      .min(16)
+      .default('swiftydoc-portal-auth-secret-local-1234567890'),
+    PASSWORD_RESET_TOKEN_TTL_MINUTES: numberFromEnv.default(30),
+    EMAIL_VERIFICATION_TOKEN_TTL_HOURS: numberFromEnv.default(24),
     RATE_LIMIT_TTL_MS: numberFromEnv.default(60000),
     RATE_LIMIT_MAX: numberFromEnv.default(120),
     WEBHOOK_DELIVERY_TIMEOUT_MS: numberFromEnv.default(5000),

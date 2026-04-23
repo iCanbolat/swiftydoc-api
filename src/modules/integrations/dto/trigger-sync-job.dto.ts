@@ -8,12 +8,6 @@ import {
 } from 'class-validator';
 
 export class TriggerSyncJobDto {
-  @ApiProperty({ example: 'org_123', maxLength: 120 })
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(120)
-  organizationId!: string;
-
   @ApiPropertyOptional({ example: 'request', maxLength: 120 })
   @IsOptional()
   @IsString()
@@ -57,11 +51,4 @@ export class TriggerSyncJobDto {
   @IsOptional()
   @IsObject()
   payload?: Record<string, unknown>;
-
-  @ApiPropertyOptional({ example: 'user_123', maxLength: 120 })
-  @IsOptional()
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(120)
-  actorUserId?: string;
 }

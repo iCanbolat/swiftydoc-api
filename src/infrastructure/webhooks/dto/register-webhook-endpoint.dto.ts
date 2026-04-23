@@ -16,12 +16,6 @@ import {
 } from '../../../common/webhooks/webhook-events';
 
 export class RegisterWebhookEndpointDto {
-  @ApiProperty({ example: 'org_123', maxLength: 120 })
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(120)
-  organizationId!: string;
-
   @ApiProperty({ example: 'https://partner.example.com/hooks/swiftydoc' })
   @IsString()
   @IsNotEmpty()

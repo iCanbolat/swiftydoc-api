@@ -16,12 +16,6 @@ import {
 } from '../../../common/portal/portal-link-types';
 
 export class CreatePortalLinkDto {
-  @ApiProperty({ example: 'org_123', maxLength: 120 })
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(120)
-  organizationId!: string;
-
   @ApiPropertyOptional({
     enum: PORTAL_LINK_PURPOSE_VALUES,
     enumName: 'PortalLinkPurpose',
@@ -60,13 +54,6 @@ export class CreatePortalLinkDto {
   @Min(1)
   @Max(100)
   maxUses?: number;
-
-  @ApiPropertyOptional({ example: 'user_123', maxLength: 120 })
-  @IsOptional()
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(120)
-  createdByUserId?: string;
 
   @ApiPropertyOptional({
     type: 'object',

@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
   ServiceUnavailableException,
@@ -23,6 +24,7 @@ import { WEBHOOK_EVENTS } from '../../common/webhooks/webhook-events';
 import { AuditLogService } from '../../infrastructure/audit/audit-log.service';
 import { DatabaseService } from '../../infrastructure/database/database.service';
 import { RemindersService } from '../../infrastructure/reminders/reminders.service';
+import { OrganizationEntitlementsService } from '../auth/organization-entitlements.service';
 import {
   answers,
   comments,
@@ -34,7 +36,10 @@ import {
   templateFields,
 } from '../../infrastructure/database/schema';
 import { WebhookService } from '../../infrastructure/webhooks/webhook.service';
-import { PORTAL_DEFAULT_EXPIRES_IN_MINUTES, TRANSITION_RULES } from './request-workflow.constants';
+import {
+  PORTAL_DEFAULT_EXPIRES_IN_MINUTES,
+  TRANSITION_RULES,
+} from './request-workflow.constants';
 import type {
   AnswerActorType,
   AnswerSource,
@@ -56,11 +61,18 @@ export class RequestWorkflowService {
   constructor(
     private readonly auditLogService: AuditLogService,
     private readonly databaseService: DatabaseService,
+    private readonly organizationEntitlementsService: OrganizationEntitlementsService,
     private readonly remindersService: RemindersService,
     private readonly webhookService: WebhookService,
   ) {}
 
   async createRequest(input: CreateRequestInput) {
+    await this.organizationEntitlementsService.assertWithinLimit(
+      input.organizationId,
+      'activeRequests',
+      1,
+    );
+
     const db = this.getDatabase();
     const requestId = randomUUID();
     const now = new Date();
@@ -298,6 +310,14 @@ export class RequestWorkflowService {
     requestId: string,
     input: SendRequestReminderInput,
   ) {
+    if (input.channel === 'sms' || input.channel === 'email') {
+      await this.organizationEntitlementsService.assertWithinLimit(
+        input.organizationId,
+        input.channel === 'sms' ? 'smsPerMonth' : 'emailPerMonth',
+        1,
+      );
+    }
+
     const db = this.getDatabase();
 
     const [requestRow] = await db
@@ -789,6 +809,77 @@ export class RequestWorkflowService {
       completedItems: submissionProgress.completedItems,
       updatedAt: now.toISOString(),
     };
+  }
+
+  async assertPortalSubmissionAccess(input: {
+    organizationId: string;
+    recipientId?: string | null;
+    requestId: string;
+    submissionId: string;
+    tokenSubmissionId?: string | null;
+  }) {
+    const db = this.getDatabase();
+    const [submission] = await db
+      .select({
+        id: submissions.id,
+        recipientId: submissions.recipientId,
+        requestId: submissions.requestId,
+      })
+      .from(submissions)
+      .where(
+        and(
+          eq(submissions.id, input.submissionId),
+          eq(submissions.organizationId, input.organizationId),
+        ),
+      )
+      .limit(1);
+
+    if (!submission) {
+      throw new NotFoundException('Submission not found.');
+    }
+
+    if (submission.requestId !== input.requestId) {
+      throw new ForbiddenException(
+        'Portal token is not valid for this submission.',
+      );
+    }
+
+    if (input.tokenSubmissionId && submission.id !== input.tokenSubmissionId) {
+      throw new ForbiddenException(
+        'Portal token is not valid for this submission.',
+      );
+    }
+
+    if (input.recipientId && submission.recipientId !== input.recipientId) {
+      throw new ForbiddenException(
+        'Portal token is not valid for this recipient.',
+      );
+    }
+
+    return submission;
+  }
+
+  async assertPortalSubmissionItemAccess(input: {
+    organizationId: string;
+    requestId: string;
+    submissionId: string;
+    submissionItemId: string;
+  }) {
+    const submissionItem = await this.getSubmissionItemContext(
+      input.submissionItemId,
+      input.organizationId,
+    );
+
+    if (
+      submissionItem.submissionId !== input.submissionId ||
+      submissionItem.requestId !== input.requestId
+    ) {
+      throw new ForbiddenException(
+        'Portal token is not valid for this submission item.',
+      );
+    }
+
+    return submissionItem;
   }
 
   private async reviewSubmissionItem(

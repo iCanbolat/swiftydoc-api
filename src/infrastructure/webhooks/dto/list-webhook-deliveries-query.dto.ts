@@ -12,12 +12,6 @@ import {
 } from '../../../common/webhooks/webhook-delivery-types';
 
 export class ListWebhookDeliveriesQueryDto {
-  @ApiProperty({ example: 'org_123', maxLength: 120 })
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(120)
-  organizationId!: string;
-
   @ApiPropertyOptional({ example: 'webhook_endpoint_123', maxLength: 120 })
   @IsOptional()
   @IsString()

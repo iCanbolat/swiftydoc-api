@@ -5,20 +5,25 @@ import {
   Param,
   Patch,
   Post,
-  Query,
+  UseGuards,
 } from '@nestjs/common';
 import {
+  ApiBearerAuth,
   ApiBadRequestResponse,
   ApiCreatedResponse,
+  ApiForbiddenResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
   ApiTags,
+  ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
+import { CurrentActor } from '../auth/current-actor.decorator';
+import { InternalAuthGuard } from '../auth/internal-auth.guard';
+import { OrganizationOwnerGuard } from '../auth/organization-owner.guard';
+import type { AuthenticatedInternalActor } from '../auth/auth.types';
 import { ApplicationsService } from './applications.service';
 import { CreateOAuthApplicationDto } from './dto/create-oauth-application.dto';
-import { GetOAuthApplicationQueryDto } from './dto/get-oauth-application-query.dto';
-import { ListOAuthApplicationsQueryDto } from './dto/list-oauth-applications-query.dto';
 import { OAuthApplicationCredentialResponseDto } from './dto/oauth-application-credential-response.dto';
 import {
   OAuthApplicationListResponseDto,
@@ -28,6 +33,8 @@ import { RotateOAuthApplicationSecretDto } from './dto/rotate-oauth-application-
 import { UpdateOAuthApplicationDto } from './dto/update-oauth-application.dto';
 
 @ApiTags('Applications')
+@ApiBearerAuth('bearer')
+@UseGuards(InternalAuthGuard)
 @Controller('v1/applications')
 export class ApplicationsController {
   constructor(private readonly applicationsService: ApplicationsService) {}
@@ -36,11 +43,13 @@ export class ApplicationsController {
     summary: 'List registered OAuth applications for an organization.',
   })
   @ApiOkResponse({ type: OAuthApplicationListResponseDto })
-  @ApiBadRequestResponse({ description: 'DTO validation failed.' })
+  @ApiUnauthorizedResponse({
+    description: 'Bearer token is missing or invalid.',
+  })
   @Get()
-  async listApplications(@Query() query: ListOAuthApplicationsQueryDto) {
+  async listApplications(@CurrentActor() actor: AuthenticatedInternalActor) {
     const applications = await this.applicationsService.listApplications(
-      query.organizationId,
+      actor.organization.id,
     );
 
     return {
@@ -55,11 +64,21 @@ export class ApplicationsController {
   })
   @ApiCreatedResponse({ type: OAuthApplicationCredentialResponseDto })
   @ApiBadRequestResponse({ description: 'DTO validation failed.' })
+  @ApiUnauthorizedResponse({
+    description: 'Bearer token is missing or invalid.',
+  })
+  @ApiForbiddenResponse({
+    description: 'Only organization owners can manage OAuth applications.',
+  })
+  @UseGuards(OrganizationOwnerGuard)
   @Post()
-  async createApplication(@Body() body: CreateOAuthApplicationDto) {
+  async createApplication(
+    @CurrentActor() actor: AuthenticatedInternalActor,
+    @Body() body: CreateOAuthApplicationDto,
+  ) {
     const result = await this.applicationsService.createApplication({
-      organizationId: body.organizationId,
-      actorUserId: body.actorUserId,
+      organizationId: actor.organization.id,
+      actorUserId: actor.user.id,
       name: body.name,
       description: body.description,
       redirectUris: body.redirectUris,
@@ -79,16 +98,18 @@ export class ApplicationsController {
 
   @ApiOperation({ summary: 'Get OAuth application details.' })
   @ApiOkResponse({ type: OAuthApplicationResponseDto })
-  @ApiBadRequestResponse({ description: 'DTO validation failed.' })
   @ApiNotFoundResponse({ description: 'OAuth application not found.' })
+  @ApiUnauthorizedResponse({
+    description: 'Bearer token is missing or invalid.',
+  })
   @Get(':id')
   async getApplication(
     @Param('id') applicationId: string,
-    @Query() query: GetOAuthApplicationQueryDto,
+    @CurrentActor() actor: AuthenticatedInternalActor,
   ) {
     const application = await this.applicationsService.getApplication(
       applicationId,
-      query.organizationId,
+      actor.organization.id,
     );
 
     return {
@@ -102,16 +123,24 @@ export class ApplicationsController {
   @ApiOkResponse({ type: OAuthApplicationResponseDto })
   @ApiBadRequestResponse({ description: 'DTO validation failed.' })
   @ApiNotFoundResponse({ description: 'OAuth application not found.' })
+  @ApiUnauthorizedResponse({
+    description: 'Bearer token is missing or invalid.',
+  })
+  @ApiForbiddenResponse({
+    description: 'Only organization owners can manage OAuth applications.',
+  })
+  @UseGuards(OrganizationOwnerGuard)
   @Patch(':id')
   async updateApplication(
     @Param('id') applicationId: string,
+    @CurrentActor() actor: AuthenticatedInternalActor,
     @Body() body: UpdateOAuthApplicationDto,
   ) {
     const application = await this.applicationsService.updateApplication(
       applicationId,
       {
-        organizationId: body.organizationId,
-        actorUserId: body.actorUserId,
+        organizationId: actor.organization.id,
+        actorUserId: actor.user.id,
         name: body.name,
         description: body.description,
         redirectUris: body.redirectUris,
@@ -132,16 +161,24 @@ export class ApplicationsController {
   @ApiOkResponse({ type: OAuthApplicationCredentialResponseDto })
   @ApiBadRequestResponse({ description: 'DTO validation failed.' })
   @ApiNotFoundResponse({ description: 'OAuth application not found.' })
+  @ApiUnauthorizedResponse({
+    description: 'Bearer token is missing or invalid.',
+  })
+  @ApiForbiddenResponse({
+    description: 'Only organization owners can manage OAuth applications.',
+  })
+  @UseGuards(OrganizationOwnerGuard)
   @Post(':id/rotate-secret')
   async rotateApplicationSecret(
     @Param('id') applicationId: string,
+    @CurrentActor() actor: AuthenticatedInternalActor,
     @Body() body: RotateOAuthApplicationSecretDto,
   ) {
     const result = await this.applicationsService.rotateApplicationSecret(
       applicationId,
       {
-        organizationId: body.organizationId,
-        actorUserId: body.actorUserId,
+        organizationId: actor.organization.id,
+        actorUserId: actor.user.id,
       },
     );
 

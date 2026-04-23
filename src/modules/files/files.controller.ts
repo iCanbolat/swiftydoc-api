@@ -7,19 +7,29 @@ import {
   Query,
   Req,
   Res,
+  UseGuards,
 } from '@nestjs/common';
 import {
+  ApiBearerAuth,
   ApiBadRequestResponse,
   ApiCreatedResponse,
   ApiFoundResponse,
+  ApiForbiddenResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
   ApiProduces,
   ApiQuery,
   ApiTags,
+  ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
+import { CurrentActor } from '../auth/current-actor.decorator';
+import { CurrentWorkspaceId } from '../auth/current-workspace-id.decorator';
+import type { AuthenticatedInternalActor } from '../auth/auth.types';
+import { InternalAuthGuard } from '../auth/internal-auth.guard';
+import { WorkspaceAccess } from '../auth/workspace-access.decorator';
+import { WorkspaceMembershipGuard } from '../auth/workspace-membership.guard';
 import { CreateDownloadLinkResponseDto } from './dto/create-download-link-response.dto';
 import { CreateDownloadLinkDto } from './dto/create-download-link.dto';
 import { DownloadFileQueryDto } from './dto/download-file-query.dto';
@@ -29,6 +39,8 @@ import { UploadFileDto } from './dto/upload-file.dto';
 import { FilesService } from './files.service';
 
 @ApiTags('Files')
+@ApiBearerAuth('bearer')
+@UseGuards(InternalAuthGuard, WorkspaceMembershipGuard)
 @Controller('v1/files')
 export class FilesController {
   constructor(private readonly filesService: FilesService) {}
@@ -38,19 +50,34 @@ export class FilesController {
   })
   @ApiCreatedResponse({ type: UploadFileResponseDto })
   @ApiBadRequestResponse({ description: 'DTO validation failed.' })
+  @ApiUnauthorizedResponse({
+    description: 'Bearer token is missing or invalid.',
+  })
+  @ApiForbiddenResponse({
+    description: 'User does not have access to this workspace.',
+  })
+  @WorkspaceAccess({ fallbackToActiveWorkspace: true, resource: 'fileContext' })
   @Post('upload')
-  async upload(@Body() body: UploadFileDto, @Req() req: Request) {
+  async upload(
+    @CurrentActor() actor: AuthenticatedInternalActor,
+    @CurrentWorkspaceId() workspaceId: string,
+    @Body() body: UploadFileDto,
+    @Req() req: Request,
+  ) {
     const uploaded = await this.filesService.uploadBase64File({
       fileName: body.fileName,
       contentBase64: body.contentBase64,
       contentType: body.contentType,
-      organizationId: body.organizationId,
+      organizationId: actor.organization.id,
       requestId: body.requestId,
       submissionId: body.submissionId,
       submissionItemId: body.submissionItemId,
-      uploadedByType: body.uploadedByType,
-      uploadedById: body.uploadedById,
-      metadata: body.metadata,
+      uploadedByType: 'user',
+      uploadedById: actor.user.id,
+      metadata: {
+        ...(body.metadata ?? {}),
+        workspaceId,
+      },
     });
 
     return {
@@ -67,6 +94,13 @@ export class FilesController {
   @ApiOperation({ summary: 'Get persisted metadata for an uploaded file.' })
   @ApiOkResponse({ type: FileMetadataResponseDto })
   @ApiNotFoundResponse({ description: 'File metadata not found.' })
+  @ApiUnauthorizedResponse({
+    description: 'Bearer token is missing or invalid.',
+  })
+  @ApiForbiddenResponse({
+    description: 'User does not have access to this workspace.',
+  })
+  @WorkspaceAccess({ key: 'id', resource: 'fileId', source: 'param' })
   @Get('metadata/:id')
   async getFileMetadata(@Param('id') fileId: string, @Req() req: Request) {
     const fileMetadata = await this.filesService.getFileMetadata(fileId);
@@ -101,6 +135,17 @@ export class FilesController {
   @ApiOperation({ summary: 'Generate a download URL for a stored file.' })
   @ApiCreatedResponse({ type: CreateDownloadLinkResponseDto })
   @ApiBadRequestResponse({ description: 'DTO validation failed.' })
+  @ApiUnauthorizedResponse({
+    description: 'Bearer token is missing or invalid.',
+  })
+  @ApiForbiddenResponse({
+    description: 'User does not have access to this workspace.',
+  })
+  @WorkspaceAccess({
+    key: 'storageKey',
+    resource: 'storageKey',
+    source: 'body',
+  })
   @Post('download-link')
   createDownloadLink(@Body() body: CreateDownloadLinkDto, @Req() req: Request) {
     return {
@@ -132,6 +177,13 @@ export class FilesController {
   @ApiNotFoundResponse({
     description: 'The requested file could not be found.',
   })
+  @ApiUnauthorizedResponse({
+    description: 'Bearer token is missing or invalid.',
+  })
+  @ApiForbiddenResponse({
+    description: 'User does not have access to this workspace.',
+  })
+  @WorkspaceAccess({ key: 'key', resource: 'storageKey', source: 'query' })
   @Get('download')
   async download(
     @Query() query: DownloadFileQueryDto,

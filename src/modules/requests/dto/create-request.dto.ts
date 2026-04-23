@@ -10,12 +10,6 @@ import {
 } from 'class-validator';
 
 export class CreateRequestDto {
-  @ApiProperty({ example: 'org_123', maxLength: 120 })
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(120)
-  organizationId!: string;
-
   @ApiProperty({ example: 'ws_123', maxLength: 120 })
   @IsString()
   @IsNotEmpty()
@@ -57,13 +51,6 @@ export class CreateRequestDto {
   @IsString()
   @IsISO8601()
   dueAt?: string;
-
-  @ApiPropertyOptional({ example: 'user_123', maxLength: 120 })
-  @IsOptional()
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(120)
-  createdByUserId?: string;
 
   @ApiPropertyOptional({ example: 'REQ-ONBOARDING-001', maxLength: 64 })
   @IsOptional()

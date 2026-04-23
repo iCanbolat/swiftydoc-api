@@ -1,13 +1,21 @@
-import { Body, Controller, Param, Post, Req } from '@nestjs/common';
+import { Body, Controller, Param, Post, Req, UseGuards } from '@nestjs/common';
 import {
+  ApiBearerAuth,
   ApiBadRequestResponse,
   ApiConflictResponse,
   ApiCreatedResponse,
+  ApiForbiddenResponse,
   ApiNotFoundResponse,
   ApiOperation,
   ApiTags,
+  ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import type { Request } from 'express';
+import { CurrentActor } from '../auth/current-actor.decorator';
+import type { AuthenticatedInternalActor } from '../auth/auth.types';
+import { InternalAuthGuard } from '../auth/internal-auth.guard';
+import { WorkspaceAccess } from '../auth/workspace-access.decorator';
+import { WorkspaceMembershipGuard } from '../auth/workspace-membership.guard';
 import { CreatePortalLinkDto } from './dto/create-portal-link.dto';
 import { CreatePortalLinkResponseDto } from './dto/create-portal-link-response.dto';
 import { CreateRequestDto } from './dto/create-request.dto';
@@ -19,6 +27,8 @@ import { TransitionRequestResponseDto } from './dto/transition-request-response.
 import { RequestWorkflowService } from './request-workflow.service';
 
 @ApiTags('Requests')
+@ApiBearerAuth('bearer')
+@UseGuards(InternalAuthGuard, WorkspaceMembershipGuard)
 @Controller('v1/requests')
 export class RequestsController {
   constructor(
@@ -28,10 +38,24 @@ export class RequestsController {
   @ApiOperation({ summary: 'Create a draft request and optional submissions.' })
   @ApiCreatedResponse({ type: CreateRequestResponseDto })
   @ApiBadRequestResponse({ description: 'DTO validation failed.' })
+  @ApiUnauthorizedResponse({
+    description: 'Bearer token is missing or invalid.',
+  })
+  @ApiForbiddenResponse({
+    description: 'User does not have access to this workspace.',
+  })
+  @WorkspaceAccess({
+    key: 'workspaceId',
+    resource: 'workspace',
+    source: 'body',
+  })
   @Post()
-  async createRequest(@Body() body: CreateRequestDto) {
+  async createRequest(
+    @CurrentActor() actor: AuthenticatedInternalActor,
+    @Body() body: CreateRequestDto,
+  ) {
     const request = await this.requestWorkflowService.createRequest({
-      organizationId: body.organizationId,
+      organizationId: actor.organization.id,
       workspaceId: body.workspaceId,
       clientId: body.clientId,
       templateId: body.templateId,
@@ -40,7 +64,7 @@ export class RequestsController {
       message: body.message,
       dueAt: body.dueAt,
       requestCode: body.requestCode,
-      createdByUserId: body.createdByUserId,
+      createdByUserId: actor.user.id,
       recipientIds: body.recipientIds ?? [],
     });
 
@@ -56,17 +80,25 @@ export class RequestsController {
     description: 'Transition is not allowed for this status.',
   })
   @ApiNotFoundResponse({ description: 'Request not found.' })
+  @ApiUnauthorizedResponse({
+    description: 'Bearer token is missing or invalid.',
+  })
+  @ApiForbiddenResponse({
+    description: 'User does not have access to this workspace.',
+  })
+  @WorkspaceAccess({ key: 'id', resource: 'request', source: 'param' })
   @Post(':id/send')
   async sendRequest(
     @Param('id') requestId: string,
+    @CurrentActor() actor: AuthenticatedInternalActor,
     @Body() body: TransitionRequestDto,
   ) {
     const request = await this.requestWorkflowService.transitionRequestStatus(
       requestId,
       'send',
       {
-        organizationId: body.organizationId,
-        actorUserId: body.actorUserId,
+        organizationId: actor.organization.id,
+        actorUserId: actor.user.id,
         reason: body.reason,
       },
     );
@@ -82,16 +114,24 @@ export class RequestsController {
   @ApiCreatedResponse({ type: SendRequestReminderResponseDto })
   @ApiBadRequestResponse({ description: 'DTO validation failed.' })
   @ApiNotFoundResponse({ description: 'Request not found.' })
+  @ApiUnauthorizedResponse({
+    description: 'Bearer token is missing or invalid.',
+  })
+  @ApiForbiddenResponse({
+    description: 'User does not have access to this workspace.',
+  })
+  @WorkspaceAccess({ key: 'id', resource: 'request', source: 'param' })
   @Post(':id/remind')
   async sendReminder(
     @Param('id') requestId: string,
+    @CurrentActor() actor: AuthenticatedInternalActor,
     @Body() body: SendRequestReminderDto,
   ) {
     const reminder = await this.requestWorkflowService.sendRequestReminder(
       requestId,
       {
-        organizationId: body.organizationId,
-        actorUserId: body.actorUserId,
+        organizationId: actor.organization.id,
+        actorUserId: actor.user.id,
         channel: body.channel,
         recipient: body.recipient,
         subject: body.subject,
@@ -115,17 +155,25 @@ export class RequestsController {
     description: 'Transition is not allowed for this status.',
   })
   @ApiNotFoundResponse({ description: 'Request not found.' })
+  @ApiUnauthorizedResponse({
+    description: 'Bearer token is missing or invalid.',
+  })
+  @ApiForbiddenResponse({
+    description: 'User does not have access to this workspace.',
+  })
+  @WorkspaceAccess({ key: 'id', resource: 'request', source: 'param' })
   @Post(':id/close')
   async closeRequest(
     @Param('id') requestId: string,
+    @CurrentActor() actor: AuthenticatedInternalActor,
     @Body() body: TransitionRequestDto,
   ) {
     const request = await this.requestWorkflowService.transitionRequestStatus(
       requestId,
       'close',
       {
-        organizationId: body.organizationId,
-        actorUserId: body.actorUserId,
+        organizationId: actor.organization.id,
+        actorUserId: actor.user.id,
         reason: body.reason,
       },
     );
@@ -142,17 +190,25 @@ export class RequestsController {
     description: 'Transition is not allowed for this status.',
   })
   @ApiNotFoundResponse({ description: 'Request not found.' })
+  @ApiUnauthorizedResponse({
+    description: 'Bearer token is missing or invalid.',
+  })
+  @ApiForbiddenResponse({
+    description: 'User does not have access to this workspace.',
+  })
+  @WorkspaceAccess({ key: 'id', resource: 'request', source: 'param' })
   @Post(':id/reopen')
   async reopenRequest(
     @Param('id') requestId: string,
+    @CurrentActor() actor: AuthenticatedInternalActor,
     @Body() body: TransitionRequestDto,
   ) {
     const request = await this.requestWorkflowService.transitionRequestStatus(
       requestId,
       'reopen',
       {
-        organizationId: body.organizationId,
-        actorUserId: body.actorUserId,
+        organizationId: actor.organization.id,
+        actorUserId: actor.user.id,
         reason: body.reason,
       },
     );
@@ -166,22 +222,30 @@ export class RequestsController {
   @ApiCreatedResponse({ type: CreatePortalLinkResponseDto })
   @ApiBadRequestResponse({ description: 'DTO validation failed.' })
   @ApiNotFoundResponse({ description: 'Request not found.' })
+  @ApiUnauthorizedResponse({
+    description: 'Bearer token is missing or invalid.',
+  })
+  @ApiForbiddenResponse({
+    description: 'User does not have access to this workspace.',
+  })
+  @WorkspaceAccess({ key: 'id', resource: 'request', source: 'param' })
   @Post(':id/portal-links')
   async createPortalLink(
     @Param('id') requestId: string,
+    @CurrentActor() actor: AuthenticatedInternalActor,
     @Body() body: CreatePortalLinkDto,
     @Req() req: Request,
   ) {
     const portalLink = await this.requestWorkflowService.createPortalLink(
       requestId,
       {
-        organizationId: body.organizationId,
+        organizationId: actor.organization.id,
         purpose: body.purpose,
         submissionId: body.submissionId,
         recipientId: body.recipientId,
         expiresInMinutes: body.expiresInMinutes,
         maxUses: body.maxUses,
-        createdByUserId: body.createdByUserId,
+        createdByUserId: actor.user.id,
         metadata: body.metadata,
       },
       this.resolveBaseUrl(req),

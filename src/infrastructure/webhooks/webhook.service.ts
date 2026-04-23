@@ -47,6 +47,7 @@ export class WebhookService implements OnModuleInit {
   }
 
   async registerEndpoint(input: {
+    actorUserId?: string;
     organizationId: string;
     secret: string;
     subscribedEvents: WebhookSubscriptionType[];
@@ -74,6 +75,8 @@ export class WebhookService implements OnModuleInit {
       category: 'webhook',
       action: AUDIT_ACTIONS.webhook.endpointRegistered,
       organizationId: mappedEndpoint.organizationId,
+      actorId: input.actorUserId,
+      actorType: input.actorUserId ? 'user' : undefined,
       resourceType: RESOURCE_TYPES.automation.webhookEndpoint,
       resourceId: mappedEndpoint.id,
       metadata: {
@@ -225,6 +228,7 @@ export class WebhookService implements OnModuleInit {
     eventType: WebhookEventType,
     data: Record<string, unknown>,
     organizationId?: string,
+    actorUserId?: string,
   ): Promise<{ deliveredTo: number; eventId: string }> {
     const db = this.getDatabase();
     const eventId = randomUUID();
@@ -268,6 +272,8 @@ export class WebhookService implements OnModuleInit {
       category: 'webhook',
       action: AUDIT_ACTIONS.webhook.eventEmitted,
       organizationId,
+      actorId: actorUserId,
+      actorType: actorUserId ? 'user' : undefined,
       resourceType: RESOURCE_TYPES.automation.webhookEvent,
       resourceId: eventId,
       metadata: {

@@ -15,12 +15,6 @@ import {
 } from '../../../common/integrations/integration-types';
 
 export class CreateIntegrationConnectionDto {
-  @ApiProperty({ example: 'org_123', maxLength: 120 })
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(120)
-  organizationId!: string;
-
   @ApiPropertyOptional({ example: 'workspace_123', maxLength: 120 })
   @IsOptional()
   @IsString()
@@ -78,11 +72,4 @@ export class CreateIntegrationConnectionDto {
   @IsOptional()
   @IsObject()
   metadata?: Record<string, unknown>;
-
-  @ApiPropertyOptional({ example: 'user_123', maxLength: 120 })
-  @IsOptional()
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(120)
-  actorUserId?: string;
 }

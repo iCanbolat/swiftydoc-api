@@ -1,14 +1,22 @@
-import { Body, Controller, Put } from '@nestjs/common';
+import { Body, Controller, Put, UseGuards } from '@nestjs/common';
 import {
+  ApiBearerAuth,
   ApiBadRequestResponse,
   ApiCreatedResponse,
+  ApiForbiddenResponse,
   ApiOperation,
   ApiTags,
+  ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { AUDIT_ACTIONS } from '../../common/audit/audit-actions';
 import { RESOURCE_TYPES } from '../../common/audit/resource-types';
 import { AuditLogService } from '../../infrastructure/audit/audit-log.service';
 import { RemindersService } from '../../infrastructure/reminders/reminders.service';
+import { CurrentActor } from '../auth/current-actor.decorator';
+import type { AuthenticatedInternalActor } from '../auth/auth.types';
+import { InternalAuthGuard } from '../auth/internal-auth.guard';
+import { OrganizationPermissions } from '../auth/organization-policy.decorator';
+import { OrganizationPolicyGuard } from '../auth/organization-policy.guard';
 import { UpsertBrandingSettingsDto } from './dto/upsert-branding-settings.dto';
 import { UpsertBrandingSettingsResponseDto } from './dto/upsert-branding-settings-response.dto';
 import { UpsertEmailTemplateVariantDto } from './dto/upsert-email-template-variant.dto';
@@ -17,6 +25,12 @@ import { UpsertReminderProviderConfigDto } from './dto/upsert-reminder-provider-
 import { UpsertReminderProviderConfigResponseDto } from './dto/upsert-reminder-provider-config-response.dto';
 
 @ApiTags('Communications')
+@ApiBearerAuth('bearer')
+@ApiUnauthorizedResponse({ description: 'Bearer token is missing or invalid.' })
+@ApiForbiddenResponse({
+  description: 'User does not have organization-level access to this resource.',
+})
+@UseGuards(InternalAuthGuard, OrganizationPolicyGuard)
 @Controller('v1/communications')
 export class CommunicationsController {
   constructor(
@@ -29,10 +43,14 @@ export class CommunicationsController {
   })
   @ApiCreatedResponse({ type: UpsertReminderProviderConfigResponseDto })
   @ApiBadRequestResponse({ description: 'DTO validation failed.' })
+  @OrganizationPermissions('organization.settings.write')
   @Put('provider-configs')
-  async upsertProviderConfig(@Body() body: UpsertReminderProviderConfigDto) {
+  async upsertProviderConfig(
+    @CurrentActor() actor: AuthenticatedInternalActor,
+    @Body() body: UpsertReminderProviderConfigDto,
+  ) {
     const config = await this.remindersService.upsertProviderConfig({
-      organizationId: body.organizationId,
+      organizationId: actor.organization.id,
       channel: body.channel,
       provider: body.provider,
       enabled: body.enabled,
@@ -43,9 +61,9 @@ export class CommunicationsController {
       category: 'data_access',
       channel: 'api',
       action: AUDIT_ACTIONS.data_access.reminderProviderConfigured,
-      organizationId: body.organizationId,
-      actorId: body.actorUserId,
-      actorType: body.actorUserId ? 'user' : undefined,
+      organizationId: actor.organization.id,
+      actorId: actor.user.id,
+      actorType: 'user',
       resourceType: RESOURCE_TYPES.automation.reminderProviderConfig,
       resourceId: config.id,
       metadata: {
@@ -70,10 +88,14 @@ export class CommunicationsController {
   @ApiOperation({ summary: 'Upsert organization-level branding settings.' })
   @ApiCreatedResponse({ type: UpsertBrandingSettingsResponseDto })
   @ApiBadRequestResponse({ description: 'DTO validation failed.' })
+  @OrganizationPermissions('organization.settings.write')
   @Put('branding')
-  async upsertBranding(@Body() body: UpsertBrandingSettingsDto) {
+  async upsertBranding(
+    @CurrentActor() actor: AuthenticatedInternalActor,
+    @Body() body: UpsertBrandingSettingsDto,
+  ) {
     const branding = await this.remindersService.upsertBrandingSettings({
-      organizationId: body.organizationId,
+      organizationId: actor.organization.id,
       displayName: body.displayName,
       logoUrl: body.logoUrl,
       primaryColor: body.primaryColor,
@@ -87,9 +109,9 @@ export class CommunicationsController {
       category: 'data_access',
       channel: 'api',
       action: AUDIT_ACTIONS.data_access.brandingSettingsUpdated,
-      organizationId: body.organizationId,
-      actorId: body.actorUserId,
-      actorType: body.actorUserId ? 'user' : undefined,
+      organizationId: actor.organization.id,
+      actorId: actor.user.id,
+      actorType: 'user',
       resourceType: RESOURCE_TYPES.identity.brandingSettings,
       resourceId: branding.id,
       metadata: {
@@ -117,13 +139,15 @@ export class CommunicationsController {
   })
   @ApiCreatedResponse({ type: UpsertEmailTemplateVariantResponseDto })
   @ApiBadRequestResponse({ description: 'DTO validation failed.' })
+  @OrganizationPermissions('organization.settings.write')
   @Put('email-template-variants')
   async upsertEmailTemplateVariant(
+    @CurrentActor() actor: AuthenticatedInternalActor,
     @Body() body: UpsertEmailTemplateVariantDto,
   ) {
     const templateVariant =
       await this.remindersService.upsertEmailTemplateVariant({
-        organizationId: body.organizationId,
+        organizationId: actor.organization.id,
         templateKey: body.templateKey,
         locale: body.locale,
         resendTemplateId: body.resendTemplateId,
@@ -136,9 +160,9 @@ export class CommunicationsController {
       category: 'data_access',
       channel: 'api',
       action: AUDIT_ACTIONS.data_access.emailTemplateVariantUpserted,
-      organizationId: body.organizationId,
-      actorId: body.actorUserId,
-      actorType: body.actorUserId ? 'user' : undefined,
+      organizationId: actor.organization.id,
+      actorId: actor.user.id,
+      actorType: 'user',
       resourceType: RESOURCE_TYPES.identity.emailTemplateVariant,
       resourceId: templateVariant.id,
       metadata: {

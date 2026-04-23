@@ -8,19 +8,6 @@ import {
 } from 'class-validator';
 
 export class ReviewSubmissionItemDto {
-  @ApiProperty({ example: 'org_123', maxLength: 120 })
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(120)
-  organizationId!: string;
-
-  @ApiPropertyOptional({ example: 'reviewer_123', maxLength: 120 })
-  @IsOptional()
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(120)
-  reviewerId?: string;
-
   @ApiPropertyOptional({
     example: 'Uploaded ID copy is blurry. Please upload a clearer scan.',
     maxLength: 2000,

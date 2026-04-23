@@ -14,19 +14,6 @@ import {
 } from '../../../common/reminders/reminder-types';
 
 export class SendRequestReminderDto {
-  @ApiProperty({ example: 'org_123', maxLength: 120 })
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(120)
-  organizationId!: string;
-
-  @ApiPropertyOptional({ example: 'user_123', maxLength: 120 })
-  @IsOptional()
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(120)
-  actorUserId?: string;
-
   @ApiProperty({
     enum: REMINDER_CHANNEL_VALUES,
     enumName: 'ReminderChannel',

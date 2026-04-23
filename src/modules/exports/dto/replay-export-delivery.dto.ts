@@ -10,12 +10,6 @@ import {
 } from 'class-validator';
 
 export class ReplayExportDeliveryDto {
-  @ApiProperty({ example: 'org_123', maxLength: 120 })
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(120)
-  organizationId!: string;
-
   @ApiPropertyOptional({
     type: String,
     isArray: true,
@@ -40,11 +34,4 @@ export class ReplayExportDeliveryDto {
   @IsOptional()
   @IsBoolean()
   failedOnly?: boolean;
-
-  @ApiPropertyOptional({ example: 'user_123', maxLength: 120 })
-  @IsOptional()
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(120)
-  actorUserId?: string;
 }

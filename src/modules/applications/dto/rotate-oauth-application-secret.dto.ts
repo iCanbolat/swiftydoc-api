@@ -1,17 +1,13 @@
-import { ApiPropertyOptional, ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
+import { ApiPropertyOptional } from '@nestjs/swagger';
+import { IsOptional, IsString, MaxLength } from 'class-validator';
 
 export class RotateOAuthApplicationSecretDto {
-  @ApiProperty({ example: 'org_123', maxLength: 120 })
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(120)
-  organizationId!: string;
-
-  @ApiPropertyOptional({ example: 'user_123', maxLength: 120 })
+  @ApiPropertyOptional({
+    example: 'Owner-approved rotation for quarterly secret hygiene.',
+    maxLength: 500,
+  })
   @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  @MaxLength(120)
-  actorUserId?: string;
+  @MaxLength(500)
+  reason?: string;
 }

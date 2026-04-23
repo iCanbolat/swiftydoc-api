@@ -17,12 +17,6 @@ import {
 } from '../applications.types';
 
 export class UpdateOAuthApplicationDto {
-  @ApiProperty({ example: 'org_123', maxLength: 120 })
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(120)
-  organizationId!: string;
-
   @ApiPropertyOptional({ example: 'SwiftyDoc Partner App', maxLength: 160 })
   @IsOptional()
   @IsString()
@@ -85,11 +79,4 @@ export class UpdateOAuthApplicationDto {
   @IsNotEmpty()
   @IsIn(OAUTH_APPLICATION_STATUS_VALUES)
   status?: OAuthApplicationStatus;
-
-  @ApiPropertyOptional({ example: 'user_123', maxLength: 120 })
-  @IsOptional()
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(120)
-  actorUserId?: string;
 }

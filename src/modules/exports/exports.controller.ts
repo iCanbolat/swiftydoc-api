@@ -1,17 +1,33 @@
-import { Body, Controller, Get, Param, Post, Query, Req } from '@nestjs/common';
 import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
+import {
+  ApiBearerAuth,
   ApiBadRequestResponse,
   ApiCreatedResponse,
+  ApiForbiddenResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
   ApiTags,
+  ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import type { Request } from 'express';
+import { CurrentActor } from '../auth/current-actor.decorator';
+import { CurrentWorkspaceId } from '../auth/current-workspace-id.decorator';
+import type { AuthenticatedInternalActor } from '../auth/auth.types';
+import { InternalAuthGuard } from '../auth/internal-auth.guard';
+import { WorkspaceAccess } from '../auth/workspace-access.decorator';
+import { WorkspaceMembershipGuard } from '../auth/workspace-membership.guard';
 import { CreateExportJobDto } from './dto/create-export-job.dto';
 import { CreateExportJobResponseDto } from './dto/create-export-job-response.dto';
 import { ExportJobResponseDto } from './dto/export-job-response.dto';
-import { GetExportJobQueryDto } from './dto/get-export-job-query.dto';
 import { ReplayExportDeliveryDto } from './dto/replay-export-delivery.dto';
 import { ExportsService } from './exports.service';
 import type {
@@ -21,6 +37,8 @@ import type {
 } from './exports.types';
 
 @ApiTags('Exports')
+@ApiBearerAuth('bearer')
+@UseGuards(InternalAuthGuard, WorkspaceMembershipGuard)
 @Controller('v1/exports')
 export class ExportsController {
   constructor(private readonly exportsService: ExportsService) {}
@@ -28,17 +46,34 @@ export class ExportsController {
   @ApiOperation({ summary: 'Queue a ZIP/PDF/CSV export job.' })
   @ApiCreatedResponse({ type: CreateExportJobResponseDto })
   @ApiBadRequestResponse({ description: 'DTO validation failed.' })
+  @ApiUnauthorizedResponse({
+    description: 'Bearer token is missing or invalid.',
+  })
+  @ApiForbiddenResponse({
+    description: 'User does not have access to this workspace.',
+  })
+  @WorkspaceAccess({
+    fallbackToActiveWorkspace: true,
+    resource: 'exportContext',
+  })
   @Post('jobs')
-  async createExportJob(@Body() body: CreateExportJobDto) {
+  async createExportJob(
+    @CurrentActor() actor: AuthenticatedInternalActor,
+    @CurrentWorkspaceId() workspaceId: string,
+    @Body() body: CreateExportJobDto,
+  ) {
     const exportJob = await this.exportsService.createExportJob({
-      organizationId: body.organizationId,
+      organizationId: actor.organization.id,
       exportType: body.exportType,
       requestId: body.requestId,
       submissionId: body.submissionId,
-      requestedByUserId: body.requestedByUserId,
+      requestedByUserId: actor.user.id,
       includeFiles: body.includeFiles,
       deliveryTargets: body.deliveryTargets,
-      metadata: body.metadata,
+      metadata: {
+        ...(body.metadata ?? {}),
+        workspaceId,
+      },
     });
 
     return {
@@ -48,17 +83,23 @@ export class ExportsController {
 
   @ApiOperation({ summary: 'Get export job status and artifact links.' })
   @ApiOkResponse({ type: ExportJobResponseDto })
-  @ApiBadRequestResponse({ description: 'DTO validation failed.' })
   @ApiNotFoundResponse({ description: 'Export job not found.' })
+  @ApiUnauthorizedResponse({
+    description: 'Bearer token is missing or invalid.',
+  })
+  @ApiForbiddenResponse({
+    description: 'User does not have access to this workspace.',
+  })
+  @WorkspaceAccess({ key: 'id', resource: 'exportJob', source: 'param' })
   @Get('jobs/:id')
   async getExportJob(
     @Param('id') exportJobId: string,
-    @Query() query: GetExportJobQueryDto,
+    @CurrentActor() actor: AuthenticatedInternalActor,
     @Req() req: Request,
   ) {
     const exportJob = await this.exportsService.getExportJob(
       exportJobId,
-      query.organizationId,
+      actor.organization.id,
     );
     return {
       data: this.buildExportJobResponseData(exportJob, req),
@@ -71,17 +112,25 @@ export class ExportsController {
   @ApiOkResponse({ type: ExportJobResponseDto })
   @ApiBadRequestResponse({ description: 'DTO validation failed.' })
   @ApiNotFoundResponse({ description: 'Export job not found.' })
+  @ApiUnauthorizedResponse({
+    description: 'Bearer token is missing or invalid.',
+  })
+  @ApiForbiddenResponse({
+    description: 'User does not have access to this workspace.',
+  })
+  @WorkspaceAccess({ key: 'id', resource: 'exportJob', source: 'param' })
   @Post('jobs/:id/delivery/replay')
   async replayExportDelivery(
     @Param('id') exportJobId: string,
+    @CurrentActor() actor: AuthenticatedInternalActor,
     @Body() body: ReplayExportDeliveryDto,
     @Req() req: Request,
   ) {
     const exportJob = await this.exportsService.replayExportDelivery(
       exportJobId,
       {
-        organizationId: body.organizationId,
-        actorUserId: body.actorUserId,
+        organizationId: actor.organization.id,
+        actorUserId: actor.user.id,
         connectionIds: body.connectionIds,
         failedOnly: body.failedOnly,
       },

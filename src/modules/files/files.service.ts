@@ -16,6 +16,7 @@ import { RESOURCE_TYPES } from '../../common/audit/resource-types';
 import { WEBHOOK_EVENTS } from '../../common/webhooks/webhook-events';
 import { AuditLogService } from '../../infrastructure/audit/audit-log.service';
 import { DatabaseService } from '../../infrastructure/database/database.service';
+import { OrganizationEntitlementsService } from '../auth/organization-entitlements.service';
 import { fileAssets } from '../../infrastructure/database/schema';
 import type { RetrievedFile } from '../../infrastructure/storage/storage.types';
 import { StorageService } from '../../infrastructure/storage/storage.service';
@@ -36,6 +37,7 @@ export class FilesService {
     private readonly auditLogService: AuditLogService,
     private readonly configService: ConfigService<RuntimeEnv, true>,
     private readonly databaseService: DatabaseService,
+    private readonly organizationEntitlementsService: OrganizationEntitlementsService,
     private readonly storageService: StorageService,
     private readonly webhookService: WebhookService,
   ) {
@@ -70,6 +72,12 @@ export class FilesService {
         `File exceeds max allowed size of ${this.maxUploadBytes} bytes.`,
       );
     }
+
+    await this.organizationEntitlementsService.assertWithinLimit(
+      input.organizationId,
+      'storageBytes',
+      body.byteLength,
+    );
 
     const declaredMimeType = input.contentType?.trim().toLowerCase() || null;
     const { detectedMimeType, effectiveMimeType } = await this.resolveMimeType({

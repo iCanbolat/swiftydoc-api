@@ -12,11 +12,16 @@ import { RemindersModule } from './infrastructure/reminders/reminders.module';
 import { StorageModule } from './infrastructure/storage/storage.module';
 import { WebhooksModule } from './infrastructure/webhooks/webhooks.module';
 import { CommunicationsModule } from './modules/communications/communications.module';
+import { ClientsModule } from './modules/clients/clients.module';
 import { ExportsModule } from './modules/exports/exports.module';
 import { FilesModule } from './modules/files/files.module';
 import { IntegrationsModule } from './modules/integrations/integrations.module';
 import { ApplicationsModule } from './modules/applications/applications.module';
+import { AuthModule } from './modules/auth/auth.module';
 import { RequestsModule } from './modules/requests/requests.module';
+import { TemplatesModule } from './modules/templates/templates.module';
+import { UsersModule } from './modules/users/users.module';
+import { WorkspacesModule } from './modules/workspaces/workspaces.module';
 import type { RuntimeEnv } from './common/config/runtime-env';
 import { ConfigService } from '@nestjs/config';
 
@@ -43,11 +48,16 @@ import { ConfigService } from '@nestjs/config';
     StorageModule,
     WebhooksModule,
     ApplicationsModule,
+    AuthModule,
+    ClientsModule,
     CommunicationsModule,
     ExportsModule,
     FilesModule,
     IntegrationsModule,
     RequestsModule,
+    TemplatesModule,
+    UsersModule,
+    WorkspacesModule,
   ],
   controllers: [AppController],
   providers: [

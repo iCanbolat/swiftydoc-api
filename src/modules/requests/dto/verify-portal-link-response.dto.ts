@@ -42,6 +42,15 @@ export class VerifyPortalLinkResponseDataDto {
 
   @ApiProperty({ example: '2026-04-28T11:00:00.000Z' })
   expiresAt!: string;
+
+  @ApiProperty({ example: 'Portal', nullable: true })
+  tokenType!: string | null;
+
+  @ApiProperty({ example: 'swd_pt_payload.signature', nullable: true })
+  portalAccessToken!: string | null;
+
+  @ApiProperty({ example: '2026-04-28T11:30:00.000Z', nullable: true })
+  accessTokenExpiresAt!: string | null;
 }
 
 export class VerifyPortalLinkResponseDto {

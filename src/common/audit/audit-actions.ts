@@ -1,9 +1,22 @@
 type ValueOf<T> = T[keyof T];
 
 export const AUDIT_ACTIONS = {
-  security: {},
+  security: {
+    internalAuthBootstrapCompleted:
+      'security.internal_auth_bootstrap_completed',
+    internalAuthEmailVerified: 'security.internal_auth_email_verified',
+    internalAuthInviteCompleted: 'security.internal_auth_invite_completed',
+    internalAuthPasswordResetCompleted:
+      'security.internal_auth_password_reset_completed',
+    internalAuthSessionStarted: 'security.internal_auth_session_started',
+    internalAuthSessionRefreshed: 'security.internal_auth_session_refreshed',
+    internalAuthSessionEnded: 'security.internal_auth_session_ended',
+    portalAuthSessionStarted: 'security.portal_auth_session_started',
+  },
   data_access: {
     brandingSettingsUpdated: 'data_access.branding_settings_updated',
+    clientCreated: 'data_access.client_created',
+    clientUpdated: 'data_access.client_updated',
     emailTemplateVariantUpserted: 'data_access.email_template_variant_upserted',
     exportJobCompleted: 'data_access.export_job_completed',
     exportJobDeliveryReplayed: 'data_access.export_job_delivery_replayed',
@@ -31,6 +44,16 @@ export const AUDIT_ACTIONS = {
     submissionItemApproved: 'data_access.submission_item_approved',
     submissionItemRejected: 'data_access.submission_item_rejected',
     submissionAutosaved: 'data_access.submission_autosaved',
+    templateCreated: 'data_access.template_created',
+    templateUpdated: 'data_access.template_updated',
+    userEmailVerificationSent: 'data_access.user_email_verification_sent',
+    userCreated: 'data_access.user_created',
+    userInviteRevoked: 'data_access.user_invite_revoked',
+    userInviteSent: 'data_access.user_invite_sent',
+    userUpdated: 'data_access.user_updated',
+    userPasswordResetRequested: 'data_access.user_password_reset_requested',
+    workspaceCreated: 'data_access.workspace_created',
+    workspaceUpdated: 'data_access.workspace_updated',
   },
   webhook: {
     deliveryFailed: 'webhook.delivery_failed',

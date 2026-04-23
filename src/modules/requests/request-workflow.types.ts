@@ -1,7 +1,7 @@
 import type { PortalLinkPurpose } from '../../common/portal/portal-link-types';
 import type { ReminderChannel } from '../../common/reminders/reminder-types';
 
-export type AnswerActorType = 'recipient' | 'reviewer' | 'system';
+export type AnswerActorType = 'recipient' | 'reviewer' | 'system' | 'user';
 
 export type AnswerSource = 'portal' | 'api';
 
