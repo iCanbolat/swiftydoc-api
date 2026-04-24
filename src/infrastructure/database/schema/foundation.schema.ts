@@ -30,6 +30,10 @@ import {
   REMINDER_PROVIDER_VALUES,
 } from '../../../common/reminders/reminder-types';
 import { WEBHOOK_DELIVERY_STATUS_VALUES } from '../../../common/webhooks/webhook-delivery-types';
+import {
+  AUDIT_AUTH_SURFACE_VALUES,
+  type AuditAuthSurface,
+} from '../../audit/audit.types';
 
 export const organizationStatusEnum = pgEnum('organization_status', [
   'active',
@@ -108,6 +112,11 @@ export const auditCategoryEnum = pgEnum('audit_category', [
 export const auditEventChannelEnum = pgEnum(
   'audit_event_channel',
   AUDIT_CHANNEL_VALUES,
+);
+
+export const auditAuthSurfaceEnum = pgEnum(
+  'audit_auth_surface',
+  AUDIT_AUTH_SURFACE_VALUES,
 );
 
 export const clientStatusEnum = pgEnum('client_status', ['active', 'archived']);
@@ -1508,8 +1517,16 @@ export const auditEvents = pgTable(
     category: auditCategoryEnum('category').notNull(),
     channel: auditEventChannelEnum('channel').$type<AuditChannel>(),
     action: varchar('action', { length: 120 }).$type<AuditAction>().notNull(),
+    authSurface: auditAuthSurfaceEnum('auth_surface')
+      .$type<AuditAuthSurface>()
+      .notNull()
+      .default('system'),
     actorType: varchar('actor_type', { length: 64 }),
     actorId: text('actor_id'),
+    sessionId: text('session_id'),
+    activeWorkspaceId: text('active_workspace_id'),
+    impersonatorActorId: text('impersonator_actor_id'),
+    impersonatorSessionId: text('impersonator_session_id'),
     resourceType: varchar('resource_type', {
       length: 64,
     }).$type<ResourceType>(),
@@ -1525,6 +1542,18 @@ export const auditEvents = pgTable(
   (table) => [
     index('audit_events_category_created_at_idx').on(
       table.category,
+      table.createdAt,
+    ),
+    index('audit_events_auth_surface_created_at_idx').on(
+      table.authSurface,
+      table.createdAt,
+    ),
+    index('audit_events_session_created_at_idx').on(
+      table.sessionId,
+      table.createdAt,
+    ),
+    index('audit_events_workspace_created_at_idx').on(
+      table.activeWorkspaceId,
       table.createdAt,
     ),
   ],

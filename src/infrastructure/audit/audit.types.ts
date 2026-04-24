@@ -5,13 +5,35 @@ import type {
 import type { AuditChannel } from '../../common/audit/audit-channel';
 import type { ResourceType } from '../../common/audit/resource-types';
 
+export const AUDIT_AUTH_SURFACE_VALUES = [
+  'internal',
+  'portal',
+  'public',
+  'system',
+] as const;
+
+export type AuditAuthSurface = (typeof AUDIT_AUTH_SURFACE_VALUES)[number];
+
+export interface AuditSecurityContext {
+  activeWorkspaceId: string | null;
+  authSurface: AuditAuthSurface;
+  impersonatorActorId: string | null;
+  impersonatorSessionId: string | null;
+  sessionId: string | null;
+}
+
 interface AuditLogEntryBase {
+  activeWorkspaceId?: string | null;
+  authSurface?: AuditAuthSurface;
   organizationId?: string;
   channel?: AuditChannel;
   actorType?: string;
   actorId?: string;
+  impersonatorActorId?: string | null;
+  impersonatorSessionId?: string | null;
   resourceType?: ResourceType;
   resourceId?: string;
+  sessionId?: string | null;
   metadata?: Record<string, unknown>;
 }
 
