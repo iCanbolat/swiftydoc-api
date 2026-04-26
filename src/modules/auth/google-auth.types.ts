@@ -25,7 +25,7 @@ export interface GoogleAuthStateTokenPayload {
   inviteToken?: string;
   organizationId?: string;
   organizationName?: string;
-  organizationSlug: string;
+  organizationSlug?: string;
   legalName?: string;
   locale?: string;
   primaryRegion?: string;

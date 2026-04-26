@@ -10,6 +10,7 @@ import {
 } from 'class-validator';
 
 const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const workspaceCodePattern = /^[A-Z0-9]{1,12}-[A-Z]{7}$/;
 
 export class BootstrapOwnerDto {
   @ApiProperty({ example: 'Acme Advisory' })
@@ -31,12 +32,12 @@ export class BootstrapOwnerDto {
   @MaxLength(160)
   workspaceName!: string;
 
-  @ApiPropertyOptional({ example: 'client-delivery' })
+  @ApiPropertyOptional({ example: 'ACME-ABCDEFG' })
   @IsOptional()
   @IsString()
   @IsNotEmpty()
-  @MaxLength(64)
-  @Matches(slugPattern)
+  @MaxLength(20)
+  @Matches(workspaceCodePattern)
   workspaceCode?: string;
 
   @ApiProperty({ example: 'owner@acme.test' })

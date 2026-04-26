@@ -92,7 +92,7 @@ export class AuthController {
   }
 
   @ApiOperation({
-    summary: 'Sign in an internal user against a specific organization.',
+    summary: 'Sign in an internal user with email and password.',
   })
   @ApiOkResponse({ type: AuthSessionResponseDto })
   @ApiBadRequestResponse({ description: 'DTO validation failed.' })
@@ -101,7 +101,6 @@ export class AuthController {
   async signIn(@Body() body: SignInDto) {
     const result = await this.authService.signIn({
       email: body.email,
-      organizationSlug: body.organizationSlug,
       password: body.password,
     });
 

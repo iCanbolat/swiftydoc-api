@@ -45,6 +45,10 @@ import type {
 import { OrganizationEntitlementsService } from './organization-entitlements.service';
 
 const scrypt = promisify(scryptCallback);
+const WORKSPACE_CODE_PATTERN = /^[A-Z0-9]{1,12}-[A-Z]{7}$/;
+const WORKSPACE_CODE_PREFIX_LENGTH = 4;
+const WORKSPACE_CODE_SUFFIX_LENGTH = 7;
+const WORKSPACE_CODE_SUFFIX_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 
 @Injectable()
 export class AuthService {
@@ -458,7 +462,6 @@ export class AuthService {
     return this.signIn({
       allowUnverified: true,
       email: context.user.email,
-      organizationSlug: context.organization.slug,
       password: input.password,
     });
   }
@@ -783,21 +786,10 @@ export class AuthService {
   async signIn(input: {
     allowUnverified?: boolean;
     email: string;
-    organizationSlug: string;
     password: string;
   }) {
     const db = this.getDatabase();
     const normalizedEmail = this.normalizeEmail(input.email);
-    const organizationSlug = this.normalizeSlug(input.organizationSlug);
-    const [organization] = await db
-      .select()
-      .from(organizations)
-      .where(eq(organizations.slug, organizationSlug))
-      .limit(1);
-
-    if (!organization || organization.status !== 'active') {
-      throw new UnauthorizedException('Credentials are invalid.');
-    }
 
     const [identityRecord] = await db
       .select({
@@ -835,6 +827,16 @@ export class AuthService {
     if (!input.allowUnverified && !emailVerificationState.emailVerifiedAt) {
       throw new ForbiddenException(
         'Email verification is required before sign in.',
+      );
+    }
+
+    const organization = await this.resolveSingleActiveOrganizationForUser(
+      identityRecord.user.id,
+    );
+
+    if (!organization) {
+      throw new ForbiddenException(
+        'User does not have an active workspace membership.',
       );
     }
 
@@ -1333,8 +1335,9 @@ export class AuthService {
     const db = this.getDatabase();
     const normalizedEmail = this.normalizeEmail(input.ownerEmail);
     const organizationSlug = this.normalizeSlug(input.organizationSlug);
-    const workspaceCode = this.normalizeSlug(
-      input.workspaceCode ?? input.organizationSlug,
+    const workspaceCode = this.buildWorkspaceCode(
+      input.organizationName,
+      input.workspaceCode,
     );
     const now = new Date();
 
@@ -2286,6 +2289,17 @@ export class AuthService {
     return identity ?? null;
   }
 
+  public async resolveSingleActiveOrganizationForUser(userId: string) {
+    return this.resolveSingleEligibleOrganizationForUser(userId, ['active']);
+  }
+
+  public async resolveSingleInviteEligibleOrganizationForUser(userId: string) {
+    return this.resolveSingleEligibleOrganizationForUser(userId, [
+      'active',
+      'invited',
+    ]);
+  }
+
   public async listInviteEligibleMemberships(
     userId: string,
     organizationId: string,
@@ -2315,12 +2329,99 @@ export class AuthService {
       .orderBy(asc(workspaces.name));
   }
 
+  private async resolveSingleEligibleOrganizationForUser(
+    userId: string,
+    membershipStatuses: Array<'active' | 'invited'>,
+  ) {
+    const db = this.getDatabase();
+    const organizationRows = await db
+      .select({
+        displayName: organizations.displayName,
+        id: organizations.id,
+        slug: organizations.slug,
+      })
+      .from(workspaceMemberships)
+      .innerJoin(
+        organizations,
+        eq(workspaceMemberships.organizationId, organizations.id),
+      )
+      .innerJoin(
+        workspaces,
+        eq(workspaceMemberships.workspaceId, workspaces.id),
+      )
+      .where(
+        and(
+          eq(workspaceMemberships.userId, userId),
+          inArray(workspaceMemberships.status, membershipStatuses),
+          eq(organizations.status, 'active'),
+          eq(workspaces.status, 'active'),
+        ),
+      )
+      .groupBy(organizations.id, organizations.slug, organizations.displayName)
+      .orderBy(asc(organizations.displayName), asc(organizations.id))
+      .limit(2);
+
+    if (organizationRows.length === 0) {
+      return null;
+    }
+
+    if (organizationRows.length > 1) {
+      throw new ForbiddenException(
+        'User belongs to multiple organizations. Continue from the invitation or workspace link for the correct organization.',
+      );
+    }
+
+    return organizationRows[0];
+  }
+
   private normalizeEmail(email: string): string {
     return email.trim().toLowerCase();
   }
 
   private normalizeSlug(value: string): string {
     return value.trim().toLowerCase();
+  }
+
+  private buildWorkspaceCode(
+    organizationName: string,
+    workspaceCode?: string,
+  ): string {
+    const normalizedWorkspaceCode = this.normalizeOptionalString(workspaceCode);
+
+    if (normalizedWorkspaceCode) {
+      const formattedWorkspaceCode = normalizedWorkspaceCode.toUpperCase();
+
+      if (!WORKSPACE_CODE_PATTERN.test(formattedWorkspaceCode)) {
+        throw new BadRequestException('Workspace code is invalid.');
+      }
+
+      return formattedWorkspaceCode;
+    }
+
+    return `${this.buildWorkspaceCodePrefix(organizationName)}-${this.generateWorkspaceCodeSuffix()}`;
+  }
+
+  private buildWorkspaceCodePrefix(value: string): string {
+    const normalized = value
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, '');
+
+    const prefix = normalized.slice(0, WORKSPACE_CODE_PREFIX_LENGTH);
+
+    return prefix || 'ORG';
+  }
+
+  private generateWorkspaceCodeSuffix(): string {
+    const randomValues = randomBytes(WORKSPACE_CODE_SUFFIX_LENGTH);
+
+    return Array.from(
+      randomValues,
+      (value) =>
+        WORKSPACE_CODE_SUFFIX_ALPHABET[
+          value % WORKSPACE_CODE_SUFFIX_ALPHABET.length
+        ],
+    ).join('');
   }
 
   private normalizeOptionalString(

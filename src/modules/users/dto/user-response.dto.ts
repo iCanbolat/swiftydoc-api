@@ -15,7 +15,7 @@ export class ManagedUserMembershipDto {
   @ApiProperty({ example: 'Client Delivery' })
   workspaceName!: string;
 
-  @ApiProperty({ example: 'client-delivery' })
+  @ApiProperty({ example: 'ACME-ABCDEFG' })
   workspaceCode!: string;
 
   @ApiProperty({ example: 'role_123' })

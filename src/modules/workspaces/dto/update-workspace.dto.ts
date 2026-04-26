@@ -4,12 +4,15 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  Matches,
   MaxLength,
 } from 'class-validator';
 import {
   WORKSPACE_STATUS_VALUES,
   type WorkspaceStatus,
 } from '../workspaces.types';
+
+const workspaceCodePattern = /^[A-Z0-9]{1,12}-[A-Z]{7}$/;
 
 export class UpdateWorkspaceDto {
   @ApiPropertyOptional({ example: 'Client Delivery', maxLength: 160 })
@@ -19,11 +22,12 @@ export class UpdateWorkspaceDto {
   @MaxLength(160)
   name?: string;
 
-  @ApiPropertyOptional({ example: 'client-delivery', maxLength: 64 })
+  @ApiPropertyOptional({ example: 'ACME-ABCDEFG', maxLength: 20 })
   @IsOptional()
   @IsString()
   @IsNotEmpty()
-  @MaxLength(64)
+  @MaxLength(20)
+  @Matches(workspaceCodePattern)
   code?: string;
 
   @ApiPropertyOptional({

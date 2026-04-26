@@ -1,23 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
-import {
-  IsEmail,
-  IsNotEmpty,
-  IsString,
-  Matches,
-  MaxLength,
-  MinLength,
-} from 'class-validator';
-
-const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+import { IsEmail, IsString, MaxLength, MinLength } from 'class-validator';
 
 export class SignInDto {
-  @ApiProperty({ example: 'acme-advisory' })
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(64)
-  @Matches(slugPattern)
-  organizationSlug!: string;
-
   @ApiProperty({ example: 'owner@acme.test' })
   @IsEmail()
   @MaxLength(255)

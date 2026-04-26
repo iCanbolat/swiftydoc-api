@@ -10,6 +10,7 @@ import {
 } from 'class-validator';
 
 const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const workspaceCodePattern = /^[A-Z0-9]{1,12}-[A-Z]{7}$/;
 const googleAuthIntentValues = ['sign_in', 'sign_up'] as const;
 
 export class StartGoogleAuthQueryDto {
@@ -26,12 +27,16 @@ export class StartGoogleAuthQueryDto {
   @MaxLength(512)
   inviteToken?: string;
 
-  @ApiProperty({ example: 'acme-advisory' })
+  @ApiPropertyOptional({ example: 'acme-advisory' })
+  @ValidateIf(
+    (payload: StartGoogleAuthQueryDto) =>
+      payload.intent === 'sign_up' || payload.organizationSlug !== undefined,
+  )
   @IsString()
   @IsNotEmpty()
   @MaxLength(64)
   @Matches(slugPattern)
-  organizationSlug!: string;
+  organizationSlug?: string;
 
   @ApiPropertyOptional({ example: 'Acme Advisory' })
   @ValidateIf(
@@ -51,12 +56,12 @@ export class StartGoogleAuthQueryDto {
   @MaxLength(160)
   workspaceName?: string;
 
-  @ApiPropertyOptional({ example: 'client-delivery' })
+  @ApiPropertyOptional({ example: 'ACME-ABCDEFG' })
   @IsOptional()
   @IsString()
   @IsNotEmpty()
-  @MaxLength(64)
-  @Matches(slugPattern)
+  @MaxLength(20)
+  @Matches(workspaceCodePattern)
   workspaceCode?: string;
 
   @ApiPropertyOptional({ example: 'Acmecorp LLC' })

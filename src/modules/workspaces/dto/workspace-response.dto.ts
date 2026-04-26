@@ -12,7 +12,7 @@ export class WorkspaceDataDto {
   @ApiProperty({ example: 'Client Delivery' })
   name!: string;
 
-  @ApiProperty({ example: 'client-delivery' })
+  @ApiProperty({ example: 'ACME-ABCDEFG' })
   code!: string;
 
   @ApiProperty({

@@ -31,6 +31,8 @@ import {
   ResolvedGoogleOidcUserProfile,
 } from './google-auth.types';
 
+const WORKSPACE_CODE_PATTERN = /^[A-Z0-9]{1,12}-[A-Z]{7}$/;
+
 @Injectable()
 export class GoogleAuthService {
   constructor(
@@ -46,7 +48,7 @@ export class GoogleAuthService {
     legalName?: string;
     locale?: string;
     organizationName?: string;
-    organizationSlug: string;
+    organizationSlug?: string;
     primaryRegion?: string;
     timezone?: string;
     workspaceCode?: string;
@@ -67,14 +69,18 @@ export class GoogleAuthService {
         input.organizationName,
       );
       const workspaceName = this.normalizeOptionalString(input.workspaceName);
-      const organizationSlug = this.normalizeSlug(input.organizationSlug);
+      const requestedOrganizationSlug = this.normalizeOptionalString(
+        input.organizationSlug,
+      );
       const workspaceCode = this.normalizeOptionalString(input.workspaceCode);
 
-      if (!organizationName || !workspaceName) {
+      if (!organizationName || !requestedOrganizationSlug || !workspaceName) {
         throw new BadRequestException(
           'Google sign-up requires organization and workspace details.',
         );
       }
+
+      const organizationSlug = this.normalizeSlug(requestedOrganizationSlug);
 
       return {
         authorizationUrl: this.buildGoogleAuthorizationUrl({
@@ -87,7 +93,7 @@ export class GoogleAuthService {
             primaryRegion: this.normalizeOptionalString(input.primaryRegion),
             timezone: this.normalizeOptionalString(input.timezone),
             workspaceCode: workspaceCode
-              ? this.normalizeSlug(workspaceCode)
+              ? this.normalizeWorkspaceCode(workspaceCode)
               : undefined,
             workspaceName,
           }),
@@ -97,14 +103,20 @@ export class GoogleAuthService {
       };
     }
 
-    const organizationSlug = this.normalizeSlug(input.organizationSlug);
+    const requestedOrganizationSlug = this.normalizeOptionalString(
+      input.organizationSlug,
+    );
 
     if (input.inviteToken) {
       const inviteContext = await this.authService.resolveInviteToken(
         input.inviteToken,
       );
 
-      if (inviteContext.organization.slug !== organizationSlug) {
+      if (
+        requestedOrganizationSlug &&
+        inviteContext.organization.slug !==
+          this.normalizeSlug(requestedOrganizationSlug)
+      ) {
         throw new BadRequestException(
           'Invite token does not match the requested organization.',
         );
@@ -124,18 +136,31 @@ export class GoogleAuthService {
       };
     }
 
-    const organization =
-      await this.authService.resolveActiveOrganizationBySlug(organizationSlug);
+    if (requestedOrganizationSlug) {
+      const organization =
+        await this.authService.resolveActiveOrganizationBySlug(
+          this.normalizeSlug(requestedOrganizationSlug),
+        );
+
+      return {
+        authorizationUrl: this.buildGoogleAuthorizationUrl({
+          stateToken: this.createGoogleStateToken({
+            intent: 'sign_in',
+            organizationId: organization.id,
+            organizationSlug: organization.slug,
+          }),
+        }),
+        organizationSlug: organization.slug,
+        outcome: 'authorization_required',
+      };
+    }
 
     return {
       authorizationUrl: this.buildGoogleAuthorizationUrl({
         stateToken: this.createGoogleStateToken({
           intent: 'sign_in',
-          organizationId: organization.id,
-          organizationSlug: organization.slug,
         }),
       }),
-      organizationSlug: organization.slug,
       outcome: 'authorization_required',
     };
   }
@@ -256,14 +281,6 @@ export class GoogleAuthService {
     state: GoogleAuthStateTokenPayload,
     googleProfile: ResolvedGoogleOidcUserProfile,
   ) {
-    if (!state.organizationId) {
-      throw new BadRequestException('Google sign-in state is invalid.');
-    }
-
-    const organization = await this.authService.resolveActiveOrganizationById(
-      state.organizationId,
-    );
-
     if (!googleProfile.emailVerifiedAt) {
       throw new ForbiddenException(
         'Google account did not return a verified email address.',
@@ -275,9 +292,14 @@ export class GoogleAuthService {
         state.inviteToken,
       );
 
-      if (inviteContext.organization.id !== organization.id) {
+      if (
+        state.organizationId &&
+        inviteContext.organization.id !== state.organizationId
+      ) {
         throw new BadRequestException('Google sign-in state is invalid.');
       }
+
+      const organization = inviteContext.organization;
 
       const linkedIdentity = await this.linkGoogleIdentityToUser({
         activateInvitedAccess: true,
@@ -351,6 +373,18 @@ export class GoogleAuthService {
         throw new ForbiddenException('User account is not active.');
       }
 
+      const organization = await this.resolveOrganizationForGoogleSignIn({
+        fallbackMode: 'active',
+        state,
+        userId: linkedIdentityRecord.user.id,
+      });
+
+      if (!organization) {
+        throw new UnauthorizedException(
+          'Google sign-in is not available for this account.',
+        );
+      }
+
       const activeMemberships = await this.authService.listActiveMemberships(
         linkedIdentityRecord.user.id,
         organization.id,
@@ -388,6 +422,18 @@ export class GoogleAuthService {
 
     if (localUser.status !== 'active' && localUser.status !== 'invited') {
       throw new ForbiddenException('User account is not active.');
+    }
+
+    const organization = await this.resolveOrganizationForGoogleSignIn({
+      fallbackMode: 'invite_eligible',
+      state,
+      userId: localUser.id,
+    });
+
+    if (!organization) {
+      throw new UnauthorizedException(
+        'Google sign-in is not available for this account.',
+      );
     }
 
     const inviteEligibleMemberships =
@@ -470,6 +516,10 @@ export class GoogleAuthService {
     }
 
     if (!state.organizationName || !state.workspaceName) {
+      throw new BadRequestException('Google sign-up state is invalid.');
+    }
+
+    if (!state.organizationSlug) {
       throw new BadRequestException('Google sign-up state is invalid.');
     }
 
@@ -606,6 +656,24 @@ export class GoogleAuthService {
       outcome: 'linked',
       providerEmail: pendingLink.googleEmail,
     };
+  }
+
+  private async resolveOrganizationForGoogleSignIn(input: {
+    fallbackMode: 'active' | 'invite_eligible';
+    state: GoogleAuthStateTokenPayload;
+    userId: string;
+  }) {
+    if (input.state.organizationId) {
+      return this.authService.resolveActiveOrganizationById(
+        input.state.organizationId,
+      );
+    }
+
+    return input.fallbackMode === 'active'
+      ? this.authService.resolveSingleActiveOrganizationForUser(input.userId)
+      : this.authService.resolveSingleInviteEligibleOrganizationForUser(
+          input.userId,
+        );
   }
 
   private async linkGoogleIdentityToUser(input: {
@@ -904,7 +972,7 @@ export class GoogleAuthService {
     inviteToken?: string;
     organizationId?: string;
     organizationName?: string;
-    organizationSlug: string;
+    organizationSlug?: string;
     legalName?: string;
     locale?: string;
     primaryRegion?: string;
@@ -968,7 +1036,10 @@ export class GoogleAuthService {
         payload,
         'organizationName',
       ),
-      organizationSlug: this.readTokenString(payload, 'organizationSlug'),
+      organizationSlug: this.readOptionalTokenString(
+        payload,
+        'organizationSlug',
+      ),
       legalName: this.readOptionalTokenString(payload, 'legalName'),
       locale: this.readOptionalTokenString(payload, 'locale'),
       primaryRegion: this.readOptionalTokenString(payload, 'primaryRegion'),
@@ -1273,6 +1344,16 @@ export class GoogleAuthService {
 
   private normalizeSlug(value: string): string {
     return value.trim().toLowerCase();
+  }
+
+  private normalizeWorkspaceCode(value: string): string {
+    const normalized = value.trim().toUpperCase();
+
+    if (!WORKSPACE_CODE_PATTERN.test(normalized)) {
+      throw new BadRequestException('Workspace code is invalid.');
+    }
+
+    return normalized;
   }
 
   private normalizeOptionalString(

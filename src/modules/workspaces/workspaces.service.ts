@@ -22,6 +22,8 @@ import type {
   WorkspaceView,
 } from './workspaces.types';
 
+const WORKSPACE_CODE_PATTERN = /^[A-Z0-9]{1,12}-[A-Z]{7}$/;
+
 @Injectable()
 export class WorkspacesService {
   constructor(
@@ -210,13 +212,9 @@ export class WorkspacesService {
   }
 
   private normalizeCode(value: string): string {
-    const normalized = value
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '');
+    const normalized = value.trim().toUpperCase();
 
-    if (!normalized) {
+    if (!WORKSPACE_CODE_PATTERN.test(normalized)) {
       throw new BadRequestException('Workspace code is invalid.');
     }
 
