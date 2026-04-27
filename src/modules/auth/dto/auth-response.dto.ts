@@ -96,9 +96,6 @@ export class AuthTokensDto {
   @ApiProperty({ example: 'swd_at_0123456789abcdef0123456789abcdef' })
   accessToken!: string;
 
-  @ApiProperty({ example: 'swd_rt_0123456789abcdef0123456789abcdef' })
-  refreshToken!: string;
-
   @ApiProperty({ example: 'Bearer' })
   tokenType!: string;
 

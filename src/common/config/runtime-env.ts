@@ -34,8 +34,23 @@ export const runtimeEnvSchema = z
     DATABASE_POOL_MAX: numberFromEnv.default(10),
     DATABASE_SSL: booleanFromEnv.default(false),
     AUTH_BOOTSTRAP_ALLOW_SIGNUP: booleanFromEnv.default(true),
+    INTERNAL_AUTH_ALLOWED_ORIGINS: z
+      .string()
+      .min(1)
+      .default('http://localhost:5173,http://127.0.0.1:5173'),
     INTERNAL_AUTH_ACCESS_TOKEN_TTL_MINUTES: numberFromEnv.default(60),
     INTERNAL_AUTH_REFRESH_TOKEN_TTL_DAYS: numberFromEnv.default(30),
+    INTERNAL_AUTH_REFRESH_COOKIE_NAME: z
+      .string()
+      .min(1)
+      .default('swd_refresh_token'),
+    INTERNAL_AUTH_REFRESH_COOKIE_PATH: z.string().min(1).default('/v1/auth'),
+    INTERNAL_AUTH_REFRESH_COOKIE_DOMAIN: z.string().min(1).optional(),
+    INTERNAL_AUTH_REFRESH_COOKIE_SAME_SITE: z
+      .enum(['strict', 'lax', 'none'])
+      .default('strict'),
+    INTERNAL_AUTH_REFRESH_COOKIE_SECURE: booleanFromEnv.optional(),
+    INTERNAL_AUTH_REFRESH_COOKIE_MAX_AGE_SECONDS: numberFromEnv.optional(),
     INTERNAL_AUTH_INVITE_TOKEN_TTL_HOURS: numberFromEnv.default(72),
     INTERNAL_AUTH_INVITE_URL_BASE: z
       .string()
@@ -61,6 +76,7 @@ export const runtimeEnvSchema = z
       .default('swiftydoc-portal-auth-secret-local-1234567890'),
     PASSWORD_RESET_TOKEN_TTL_MINUTES: numberFromEnv.default(30),
     EMAIL_VERIFICATION_TOKEN_TTL_HOURS: numberFromEnv.default(24),
+    HTTP_TRUST_PROXY: booleanFromEnv.default(false),
     RATE_LIMIT_TTL_MS: numberFromEnv.default(60000),
     RATE_LIMIT_MAX: numberFromEnv.default(120),
     WEBHOOK_DELIVERY_TIMEOUT_MS: numberFromEnv.default(5000),
@@ -132,6 +148,27 @@ export const runtimeEnvSchema = z
     ONEDRIVE_SHAREPOINT_ITEM_ID: z.string().min(1).optional(),
   })
   .superRefine((env, ctx) => {
+    if (parseOriginList(env.INTERNAL_AUTH_ALLOWED_ORIGINS).length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          'INTERNAL_AUTH_ALLOWED_ORIGINS must contain at least one origin.',
+        path: ['INTERNAL_AUTH_ALLOWED_ORIGINS'],
+      });
+    }
+
+    if (
+      env.INTERNAL_AUTH_REFRESH_COOKIE_SAME_SITE === 'none' &&
+      env.INTERNAL_AUTH_REFRESH_COOKIE_SECURE !== true
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          'INTERNAL_AUTH_REFRESH_COOKIE_SECURE must be true when SameSite=None.',
+        path: ['INTERNAL_AUTH_REFRESH_COOKIE_SECURE'],
+      });
+    }
+
     if (env.NODE_ENV !== 'test' && !env.DATABASE_URL) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -187,4 +224,15 @@ export function validateRuntimeEnv(
   config: Record<string, unknown>,
 ): RuntimeEnv {
   return runtimeEnvSchema.parse(config);
+}
+
+export function parseOriginList(value: string): string[] {
+  const uniqueOrigins = new Set(
+    value
+      .split(',')
+      .map((origin) => origin.trim())
+      .filter((origin) => origin.length > 0),
+  );
+
+  return [...uniqueOrigins];
 }

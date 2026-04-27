@@ -585,6 +585,7 @@ export class GoogleAuthService {
     return {
       actor,
       outcome: 'signed_in',
+      refreshToken: result.sessionArtifacts.refreshToken,
       tokens: this.serializeTokens(result.sessionArtifacts),
     };
   }
@@ -1328,12 +1329,10 @@ export class GoogleAuthService {
   private serializeTokens(sessionArtifacts: {
     accessToken: string;
     expiresAt: Date;
-    refreshToken: string;
   }) {
     return {
       accessToken: sessionArtifacts.accessToken,
       expiresAt: sessionArtifacts.expiresAt.toISOString(),
-      refreshToken: sessionArtifacts.refreshToken,
       tokenType: 'Bearer',
     };
   }

@@ -210,11 +210,8 @@ describe('AppController (e2e)', () => {
       .expect(400);
   });
 
-  it('/v1/auth/refresh (POST) rejects invalid dto payload', () => {
-    return request(app.getHttpServer())
-      .post('/v1/auth/refresh')
-      .send({})
-      .expect(400);
+  it('/v1/auth/refresh (POST) rejects missing refresh cookie', () => {
+    return request(app.getHttpServer()).post('/v1/auth/refresh').expect(401);
   });
 
   it('/v1/auth/me (GET) rejects missing bearer token', () => {

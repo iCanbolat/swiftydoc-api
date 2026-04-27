@@ -25,6 +25,25 @@
 
 [Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
 
+## Internal Auth Cookie Env
+
+The internal auth refresh token now lives in an HttpOnly cookie. Use the values in [./.env.example](.env.example) as the source of truth and keep the following matrix in mind:
+
+| Setting                                  | Local HTTP dev                                | Production HTTPS                                   |
+| ---------------------------------------- | --------------------------------------------- | -------------------------------------------------- |
+| `INTERNAL_AUTH_ALLOWED_ORIGINS`          | `http://localhost:5173,http://127.0.0.1:5173` | Your deployed app origins                          |
+| `INTERNAL_AUTH_REFRESH_COOKIE_DOMAIN`    | unset                                         | set only if you need a shared parent domain cookie |
+| `INTERNAL_AUTH_REFRESH_COOKIE_PATH`      | `/v1/auth`                                    | `/v1/auth`                                         |
+| `INTERNAL_AUTH_REFRESH_COOKIE_SAME_SITE` | `strict`                                      | `strict`                                           |
+| `INTERNAL_AUTH_REFRESH_COOKIE_SECURE`    | `false`                                       | `true`                                             |
+| `HTTP_TRUST_PROXY`                       | `false`                                       | `true` behind a proxy / load balancer              |
+
+Notes:
+
+- `SameSite=strict` is the default and should remain the production baseline.
+- `INTERNAL_AUTH_REFRESH_COOKIE_SECURE` must be `true` when `INTERNAL_AUTH_REFRESH_COOKIE_SAME_SITE=none`.
+- If you run production behind a reverse proxy, enable `HTTP_TRUST_PROXY` so secure cookies are handled correctly.
+
 ## Project setup
 
 ```bash

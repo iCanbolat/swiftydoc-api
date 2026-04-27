@@ -783,6 +783,7 @@ export class AuthService {
 
     return {
       actor,
+      refreshToken: result.sessionArtifacts.refreshToken,
       tokens: this.serializeTokens(result.sessionArtifacts),
     };
   }
@@ -907,6 +908,7 @@ export class AuthService {
 
     return {
       actor,
+      refreshToken: sessionArtifacts.refreshToken,
       tokens: this.serializeTokens(sessionArtifacts),
     };
   }
@@ -918,17 +920,32 @@ export class AuthService {
     const [storedRefreshToken] = await db
       .select()
       .from(refreshTokens)
-      .where(
-        and(
-          eq(refreshTokens.tokenHash, refreshTokenHash),
-          isNull(refreshTokens.revokedAt),
-          isNull(refreshTokens.consumedAt),
-          gt(refreshTokens.expiresAt, now),
-        ),
-      )
+      .where(eq(refreshTokens.tokenHash, refreshTokenHash))
       .limit(1);
 
     if (!storedRefreshToken) {
+      throw new UnauthorizedException('Refresh token is invalid.');
+    }
+
+    if (storedRefreshToken.revokedAt || storedRefreshToken.consumedAt) {
+      await this.revokeRefreshFamilyAndSession({
+        familyId: storedRefreshToken.familyId,
+        revokedAt: now,
+        sessionId: storedRefreshToken.sessionId,
+      });
+
+      await this.recordRefreshReplayDetected({
+        familyId: storedRefreshToken.familyId,
+        reason: storedRefreshToken.revokedAt ? 'revoked' : 'consumed',
+        refreshTokenId: storedRefreshToken.id,
+        sessionId: storedRefreshToken.sessionId,
+        userId: storedRefreshToken.userId,
+      });
+
+      throw new UnauthorizedException('Refresh token is invalid.');
+    }
+
+    if (storedRefreshToken.expiresAt.getTime() <= now.getTime()) {
       throw new UnauthorizedException('Refresh token is invalid.');
     }
 
@@ -1004,14 +1021,57 @@ export class AuthService {
       sessionId: sessionRecord.session.id,
     });
 
+    let rotationConflictDetected = false;
+
     await db.transaction(async (tx) => {
-      await tx
+      const consumedRefreshTokens = await tx
         .update(refreshTokens)
         .set({
           consumedAt: now,
           replacedByTokenId: rotatedArtifacts.refreshTokenId,
         })
-        .where(eq(refreshTokens.id, storedRefreshToken.id));
+        .where(
+          and(
+            eq(refreshTokens.id, storedRefreshToken.id),
+            isNull(refreshTokens.revokedAt),
+            isNull(refreshTokens.consumedAt),
+            gt(refreshTokens.expiresAt, now),
+          ),
+        )
+        .returning({ id: refreshTokens.id });
+
+      if (consumedRefreshTokens.length !== 1) {
+        rotationConflictDetected = true;
+
+        await tx
+          .update(refreshTokens)
+          .set({
+            revokedAt: now,
+          })
+          .where(
+            and(
+              eq(refreshTokens.familyId, storedRefreshToken.familyId),
+              eq(refreshTokens.sessionId, storedRefreshToken.sessionId),
+              isNull(refreshTokens.revokedAt),
+            ),
+          );
+
+        await tx
+          .update(userSessions)
+          .set({
+            revokedAt: now,
+            lastSeenAt: now,
+            updatedAt: now,
+          })
+          .where(
+            and(
+              eq(userSessions.id, sessionRecord.session.id),
+              isNull(userSessions.revokedAt),
+            ),
+          );
+
+        return;
+      }
 
       await tx
         .update(userSessions)
@@ -1030,6 +1090,18 @@ export class AuthService {
         .insert(refreshTokens)
         .values(rotatedArtifacts.refreshTokenValues);
     });
+
+    if (rotationConflictDetected) {
+      await this.recordRefreshReplayDetected({
+        familyId: storedRefreshToken.familyId,
+        reason: 'rotation_conflict',
+        refreshTokenId: storedRefreshToken.id,
+        sessionId: storedRefreshToken.sessionId,
+        userId: storedRefreshToken.userId,
+      });
+
+      throw new UnauthorizedException('Refresh token is invalid.');
+    }
 
     await this.auditLogService.record({
       category: 'security',
@@ -1052,6 +1124,7 @@ export class AuthService {
 
     return {
       actor,
+      refreshToken: rotatedArtifacts.refreshToken,
       tokens: this.serializeTokens(rotatedArtifacts),
     };
   }
@@ -1189,30 +1262,11 @@ export class AuthService {
 
   async signOut(accessToken: string): Promise<void> {
     const sessionRecord = await this.getSessionByAccessToken(accessToken);
-    const db = this.getDatabase();
     const now = new Date();
 
-    await db.transaction(async (tx) => {
-      await tx
-        .update(userSessions)
-        .set({
-          revokedAt: now,
-          lastSeenAt: now,
-          updatedAt: now,
-        })
-        .where(eq(userSessions.id, sessionRecord.session.id));
-
-      await tx
-        .update(refreshTokens)
-        .set({
-          revokedAt: now,
-        })
-        .where(
-          and(
-            eq(refreshTokens.sessionId, sessionRecord.session.id),
-            isNull(refreshTokens.revokedAt),
-          ),
-        );
+    await this.revokeRefreshFamilyAndSession({
+      revokedAt: now,
+      sessionId: sessionRecord.session.id,
     });
 
     await this.auditLogService.record({
@@ -1305,6 +1359,7 @@ export class AuthService {
 
     return {
       actor,
+      refreshToken: sessionArtifacts.refreshToken,
       tokens: this.serializeTokens(sessionArtifacts),
     };
   }
@@ -2057,14 +2112,79 @@ export class AuthService {
   private serializeTokens(sessionArtifacts: {
     accessToken: string;
     expiresAt: Date;
-    refreshToken: string;
   }) {
     return {
       accessToken: sessionArtifacts.accessToken,
       expiresAt: sessionArtifacts.expiresAt.toISOString(),
-      refreshToken: sessionArtifacts.refreshToken,
       tokenType: 'Bearer',
     };
+  }
+
+  private async revokeRefreshFamilyAndSession(input: {
+    familyId?: string;
+    revokedAt: Date;
+    sessionId: string;
+  }): Promise<void> {
+    const db = this.getDatabase();
+
+    await db.transaction(async (tx) => {
+      const refreshWhereClause = input.familyId
+        ? and(
+            eq(refreshTokens.familyId, input.familyId),
+            eq(refreshTokens.sessionId, input.sessionId),
+            isNull(refreshTokens.revokedAt),
+          )
+        : and(
+            eq(refreshTokens.sessionId, input.sessionId),
+            isNull(refreshTokens.revokedAt),
+          );
+
+      await tx
+        .update(refreshTokens)
+        .set({
+          revokedAt: input.revokedAt,
+        })
+        .where(refreshWhereClause);
+
+      await tx
+        .update(userSessions)
+        .set({
+          revokedAt: input.revokedAt,
+          lastSeenAt: input.revokedAt,
+          updatedAt: input.revokedAt,
+        })
+        .where(
+          and(
+            eq(userSessions.id, input.sessionId),
+            isNull(userSessions.revokedAt),
+          ),
+        );
+    });
+  }
+
+  private async recordRefreshReplayDetected(input: {
+    familyId: string;
+    reason: 'consumed' | 'revoked' | 'rotation_conflict';
+    refreshTokenId: string;
+    sessionId: string;
+    userId: string;
+  }): Promise<void> {
+    await this.auditLogService.record({
+      category: 'security',
+      channel: 'api',
+      action: AUDIT_ACTIONS.security.internalAuthSessionEnded,
+      actorId: input.userId,
+      actorType: 'user',
+      authSurface: 'internal',
+      metadata: {
+        familyId: input.familyId,
+        reason: input.reason,
+        refreshReplayDetected: true,
+      },
+      resourceId: input.sessionId,
+      resourceType: RESOURCE_TYPES.identity.userSession,
+      sessionId: input.sessionId,
+    });
   }
 
   private createToken(prefix: 'at' | 'rt' | 'inv' | 'pw' | 'ev'): string {
