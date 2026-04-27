@@ -8,9 +8,17 @@ import {
   MaxLength,
   ValidateIf,
 } from 'class-validator';
+import {
+  MAX_LENGTH_LOCALE,
+  MAX_LENGTH_ORGANIZATION_NAME,
+  MAX_LENGTH_ORGANIZATION_SLUG,
+  MAX_LENGTH_REGION,
+  MAX_LENGTH_TIMEZONE,
+  MAX_LENGTH_WORKSPACE_NAME,
+  SLUG_PATTERN,
+  WORKSPACE_CODE_PATTERN,
+} from '../auth.constants';
 
-const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const workspaceCodePattern = /^[A-Z0-9]{1,12}-[A-Z]{7}$/;
 const googleAuthIntentValues = ['sign_in', 'sign_up'] as const;
 
 export class StartGoogleAuthQueryDto {
@@ -34,8 +42,8 @@ export class StartGoogleAuthQueryDto {
   )
   @IsString()
   @IsNotEmpty()
-  @MaxLength(64)
-  @Matches(slugPattern)
+  @MaxLength(MAX_LENGTH_ORGANIZATION_SLUG)
+  @Matches(SLUG_PATTERN)
   organizationSlug?: string;
 
   @ApiPropertyOptional({ example: 'Acme Advisory' })
@@ -44,7 +52,7 @@ export class StartGoogleAuthQueryDto {
   )
   @IsString()
   @IsNotEmpty()
-  @MaxLength(160)
+  @MaxLength(MAX_LENGTH_ORGANIZATION_NAME)
   organizationName?: string;
 
   @ApiPropertyOptional({ example: 'Client Delivery' })
@@ -53,43 +61,43 @@ export class StartGoogleAuthQueryDto {
   )
   @IsString()
   @IsNotEmpty()
-  @MaxLength(160)
+  @MaxLength(MAX_LENGTH_WORKSPACE_NAME)
   workspaceName?: string;
 
-  @ApiPropertyOptional({ example: 'ACME-ABCDEFG' })
+  @ApiPropertyOptional({ example: 'ACM-ABCDE' })
   @IsOptional()
   @IsString()
   @IsNotEmpty()
-  @MaxLength(20)
-  @Matches(workspaceCodePattern)
+  @MaxLength(9)
+  @Matches(WORKSPACE_CODE_PATTERN)
   workspaceCode?: string;
 
   @ApiPropertyOptional({ example: 'Acmecorp LLC' })
   @IsOptional()
   @IsString()
   @IsNotEmpty()
-  @MaxLength(160)
+  @MaxLength(MAX_LENGTH_ORGANIZATION_NAME)
   legalName?: string;
 
   @ApiPropertyOptional({ example: 'tr' })
   @IsOptional()
   @IsString()
   @IsNotEmpty()
-  @MaxLength(16)
+  @MaxLength(MAX_LENGTH_LOCALE)
   locale?: string;
 
   @ApiPropertyOptional({ example: 'mena' })
   @IsOptional()
   @IsString()
   @IsNotEmpty()
-  @MaxLength(32)
+  @MaxLength(MAX_LENGTH_REGION)
   primaryRegion?: string;
 
   @ApiPropertyOptional({ example: 'Europe/Istanbul' })
   @IsOptional()
   @IsString()
   @IsNotEmpty()
-  @MaxLength(64)
+  @MaxLength(MAX_LENGTH_TIMEZONE)
   timezone?: string;
 }
 

@@ -22,7 +22,7 @@ import type {
   WorkspaceView,
 } from './workspaces.types';
 
-const WORKSPACE_CODE_PATTERN = /^[A-Z0-9]{1,12}-[A-Z]{7}$/;
+const WORKSPACE_CODE_PATTERN = /^[A-Z0-9]{3}-[A-Z]{5}$/;
 
 @Injectable()
 export class WorkspacesService {

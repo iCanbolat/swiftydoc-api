@@ -89,7 +89,10 @@ export class ResendEmailReminderProvider implements ReminderChannelProvider {
       }),
     });
 
+    
+
     const responseBody = (await response.json()) as ResendSendResponse;
+    console.log(`Resend API response status: ${response.status}, body: ${JSON.stringify(responseBody)}`); // Debug log
 
     if (!response.ok) {
       throw new ServiceUnavailableException(

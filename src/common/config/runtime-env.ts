@@ -40,7 +40,7 @@ export const runtimeEnvSchema = z
     INTERNAL_AUTH_INVITE_URL_BASE: z
       .string()
       .url()
-      .default('http://localhost:3000/accept-invite'),
+      .default('http://localhost:5173/accept-invite'),
     INTERNAL_AUTH_GOOGLE_STATE_SECRET: z
       .string()
       .min(16)
@@ -49,11 +49,11 @@ export const runtimeEnvSchema = z
     INTERNAL_AUTH_EMAIL_VERIFICATION_URL_BASE: z
       .string()
       .url()
-      .default('http://localhost:3000/verify-email'),
+      .default('http://localhost:5173/verify-email'),
     INTERNAL_AUTH_PASSWORD_RESET_URL_BASE: z
       .string()
       .url()
-      .default('http://localhost:3000/reset-password'),
+      .default('http://localhost:5173/reset-password'),
     PORTAL_AUTH_TOKEN_TTL_MINUTES: numberFromEnv.default(30),
     PORTAL_AUTH_TOKEN_SECRET: z
       .string()

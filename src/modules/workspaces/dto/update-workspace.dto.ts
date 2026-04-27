@@ -12,7 +12,7 @@ import {
   type WorkspaceStatus,
 } from '../workspaces.types';
 
-const workspaceCodePattern = /^[A-Z0-9]{1,12}-[A-Z]{7}$/;
+const workspaceCodePattern = /^[A-Z0-9]{3}-[A-Z]{5}$/;
 
 export class UpdateWorkspaceDto {
   @ApiPropertyOptional({ example: 'Client Delivery', maxLength: 160 })
@@ -22,11 +22,11 @@ export class UpdateWorkspaceDto {
   @MaxLength(160)
   name?: string;
 
-  @ApiPropertyOptional({ example: 'ACME-ABCDEFG', maxLength: 20 })
+  @ApiPropertyOptional({ example: 'ACM-ABCDE', maxLength: 9 })
   @IsOptional()
   @IsString()
   @IsNotEmpty()
-  @MaxLength(20)
+  @MaxLength(9)
   @Matches(workspaceCodePattern)
   code?: string;
 

@@ -44,11 +44,15 @@ import type {
 } from './auth.types';
 import { OrganizationEntitlementsService } from './organization-entitlements.service';
 
+import {
+  PASSWORD_MIN_LENGTH,
+  WORKSPACE_CODE_PATTERN,
+  WORKSPACE_CODE_PREFIX_LENGTH,
+  WORKSPACE_CODE_SUFFIX_ALPHABET,
+  WORKSPACE_CODE_SUFFIX_LENGTH,
+} from './auth.constants';
+
 const scrypt = promisify(scryptCallback);
-const WORKSPACE_CODE_PATTERN = /^[A-Z0-9]{1,12}-[A-Z]{7}$/;
-const WORKSPACE_CODE_PREFIX_LENGTH = 4;
-const WORKSPACE_CODE_SUFFIX_LENGTH = 7;
-const WORKSPACE_CODE_SUFFIX_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 
 @Injectable()
 export class AuthService {
@@ -2409,7 +2413,7 @@ export class AuthService {
 
     const prefix = normalized.slice(0, WORKSPACE_CODE_PREFIX_LENGTH);
 
-    return prefix || 'ORG';
+    return prefix.padEnd(WORKSPACE_CODE_PREFIX_LENGTH, 'X');
   }
 
   private generateWorkspaceCodeSuffix(): string {
