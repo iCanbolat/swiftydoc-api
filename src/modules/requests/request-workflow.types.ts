@@ -1,5 +1,7 @@
 import type { PortalLinkPurpose } from '../../common/portal/portal-link-types';
 import type { ReminderChannel } from '../../common/reminders/reminder-types';
+import type { PaginationParams } from '../../common/http/pagination.dto';
+import type { RequestStatus } from '../../common/requests/request-workflow';
 
 export type AnswerActorType = 'recipient' | 'reviewer' | 'system' | 'user';
 
@@ -86,4 +88,39 @@ export interface SendRequestReminderInput {
   templateVariables?: Record<string, unknown>;
   locale?: string;
   metadata?: Record<string, unknown>;
+}
+
+export interface ListRequestsInput {
+  organizationId: string;
+  workspaceId: string;
+  clientId?: string;
+  status?: RequestStatus;
+  pagination: PaginationParams;
+}
+
+export interface RequestReadModel {
+  id: string;
+  organizationId: string;
+  workspaceId: string;
+  clientId: string;
+  templateId: string;
+  templateVersionId: string;
+  requestCode: string;
+  title: string;
+  message: string | null;
+  status: RequestStatus;
+  dueAt: string | null;
+  sentAt: string | null;
+  closedAt: string | null;
+  templateName: string;
+  recipientCount: number;
+  completedItems: number;
+  totalItems: number;
+  ownerUser: {
+    id: string;
+    fullName: string;
+    email: string;
+  } | null;
+  createdAt: string;
+  updatedAt: string;
 }

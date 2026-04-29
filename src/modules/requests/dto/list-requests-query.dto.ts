@@ -7,37 +7,33 @@ import {
   MaxLength,
 } from 'class-validator';
 import { PaginationQueryDto } from '../../../common/http/pagination.dto';
-import { CLIENT_STATUS_VALUES, type ClientStatus } from '../clients.types';
+import {
+  REQUEST_STATUS_VALUES,
+  type RequestStatus,
+} from '../../../common/requests/request-workflow';
 
-export class ListClientsQueryDto extends PaginationQueryDto {
+export class ListRequestsQueryDto extends PaginationQueryDto {
   @ApiProperty({ example: 'ws_123', maxLength: 120 })
   @IsString()
   @IsNotEmpty()
   @MaxLength(120)
   workspaceId!: string;
 
-  @ApiPropertyOptional({ example: 'acme', maxLength: 160 })
-  @IsOptional()
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(160)
-  search?: string;
-
-  @ApiPropertyOptional({ example: 'Istanbul', maxLength: 120 })
+  @ApiPropertyOptional({ example: 'client_123', maxLength: 120 })
   @IsOptional()
   @IsString()
   @IsNotEmpty()
   @MaxLength(120)
-  province?: string;
+  clientId?: string;
 
   @ApiPropertyOptional({
-    enum: CLIENT_STATUS_VALUES,
-    enumName: 'ClientStatus',
-    example: 'active',
+    enum: REQUEST_STATUS_VALUES,
+    enumName: 'RequestStatus',
+    example: 'in_progress',
   })
   @IsOptional()
   @IsString()
   @IsNotEmpty()
-  @IsIn(CLIENT_STATUS_VALUES)
-  status?: ClientStatus;
+  @IsIn(REQUEST_STATUS_VALUES)
+  status?: RequestStatus;
 }

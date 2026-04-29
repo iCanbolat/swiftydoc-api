@@ -255,6 +255,16 @@ describe('AppController (e2e)', () => {
       .expect(401);
   });
 
+  it('/v1/requests (GET) rejects missing bearer token', () => {
+    return request(app.getHttpServer())
+      .get('/v1/requests?workspaceId=ws_123')
+      .expect(401);
+  });
+
+  it('/v1/requests/:id (GET) rejects missing bearer token', () => {
+    return request(app.getHttpServer()).get('/v1/requests/req_123').expect(401);
+  });
+
   it('/v1/requests/:id/send (POST) rejects missing bearer token', () => {
     return request(app.getHttpServer())
       .post('/v1/requests/req_123/send')

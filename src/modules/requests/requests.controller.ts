@@ -1,16 +1,27 @@
-import { Body, Controller, Param, Post, Req, UseGuards } from '@nestjs/common';
 import {
-  ApiBearerAuth,
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
+import {
   ApiBadRequestResponse,
+  ApiBearerAuth,
   ApiConflictResponse,
   ApiCreatedResponse,
   ApiForbiddenResponse,
   ApiNotFoundResponse,
+  ApiOkResponse,
   ApiOperation,
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import type { Request } from 'express';
+import { resolvePagination } from '../../common/http/pagination.dto';
 import { CurrentActor } from '../auth/current-actor.decorator';
 import type { AuthenticatedInternalActor } from '../auth/auth.types';
 import { InternalAuthGuard } from '../auth/internal-auth.guard';
@@ -20,6 +31,11 @@ import { CreatePortalLinkDto } from './dto/create-portal-link.dto';
 import { CreatePortalLinkResponseDto } from './dto/create-portal-link-response.dto';
 import { CreateRequestDto } from './dto/create-request.dto';
 import { CreateRequestResponseDto } from './dto/create-request-response.dto';
+import { ListRequestsQueryDto } from './dto/list-requests-query.dto';
+import {
+  RequestListResponseDto,
+  RequestResponseDto,
+} from './dto/request-response.dto';
 import { SendRequestReminderDto } from './dto/send-request-reminder.dto';
 import { SendRequestReminderResponseDto } from './dto/send-request-reminder-response.dto';
 import { TransitionRequestDto } from './dto/transition-request.dto';
@@ -34,6 +50,64 @@ export class RequestsController {
   constructor(
     private readonly requestWorkflowService: RequestWorkflowService,
   ) {}
+
+  @ApiOperation({ summary: 'List requests for a workspace.' })
+  @ApiOkResponse({ type: RequestListResponseDto })
+  @ApiBadRequestResponse({ description: 'DTO validation failed.' })
+  @ApiUnauthorizedResponse({
+    description: 'Bearer token is missing or invalid.',
+  })
+  @ApiForbiddenResponse({
+    description: 'User does not have access to this workspace.',
+  })
+  @WorkspaceAccess({
+    key: 'workspaceId',
+    resource: 'workspace',
+    source: 'query',
+  })
+  @Get()
+  async listRequests(
+    @CurrentActor() actor: AuthenticatedInternalActor,
+    @Query() query: ListRequestsQueryDto,
+  ) {
+    const result = await this.requestWorkflowService.listRequests({
+      organizationId: actor.organization.id,
+      workspaceId: query.workspaceId,
+      clientId: query.clientId,
+      status: query.status,
+      pagination: resolvePagination(query),
+    });
+
+    return {
+      data: result.data,
+      meta: result.meta,
+    };
+  }
+
+  @ApiOperation({ summary: 'Get a request by id.' })
+  @ApiOkResponse({ type: RequestResponseDto })
+  @ApiNotFoundResponse({ description: 'Request not found.' })
+  @ApiUnauthorizedResponse({
+    description: 'Bearer token is missing or invalid.',
+  })
+  @ApiForbiddenResponse({
+    description: 'User does not have access to this workspace.',
+  })
+  @WorkspaceAccess({ key: 'id', resource: 'request', source: 'param' })
+  @Get(':id')
+  async getRequest(
+    @Param('id') requestId: string,
+    @CurrentActor() actor: AuthenticatedInternalActor,
+  ) {
+    const request = await this.requestWorkflowService.getRequest(
+      requestId,
+      actor.organization.id,
+    );
+
+    return {
+      data: request,
+    };
+  }
 
   @ApiOperation({ summary: 'Create a draft request and optional submissions.' })
   @ApiCreatedResponse({ type: CreateRequestResponseDto })

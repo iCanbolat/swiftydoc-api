@@ -700,6 +700,8 @@ export const clients = pgTable(
     displayName: varchar('display_name', { length: 160 }).notNull(),
     legalName: varchar('legal_name', { length: 160 }),
     externalRef: varchar('external_ref', { length: 120 }),
+    province: varchar('province', { length: 120 }),
+    district: varchar('district', { length: 120 }),
     status: clientStatusEnum('status').notNull().default('active'),
     metadata: jsonb('metadata')
       .$type<Record<string, unknown>>()

@@ -31,6 +31,20 @@ export class UpdateClientDto {
   @MaxLength(120)
   externalRef?: string;
 
+  @ApiPropertyOptional({ example: 'Istanbul', maxLength: 120 })
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(120)
+  province?: string;
+
+  @ApiPropertyOptional({ example: 'Besiktas', maxLength: 120 })
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(120)
+  district?: string;
+
   @ApiPropertyOptional({
     enum: CLIENT_STATUS_VALUES,
     enumName: 'ClientStatus',

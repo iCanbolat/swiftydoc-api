@@ -2,7 +2,15 @@ import type { PaginationParams } from '../../common/http/pagination.dto';
 
 export const CLIENT_STATUS_VALUES = ['active', 'archived'] as const;
 
+export const CLIENT_DETAIL_INCLUDE_VALUES = [
+  'summary',
+  'contactsPreview',
+  'requestHistory',
+] as const;
+
 export type ClientStatus = (typeof CLIENT_STATUS_VALUES)[number];
+
+export type ClientDetailInclude = (typeof CLIENT_DETAIL_INCLUDE_VALUES)[number];
 
 export interface ClientRecord {
   id: string;
@@ -11,6 +19,8 @@ export interface ClientRecord {
   displayName: string;
   legalName: string | null;
   externalRef: string | null;
+  province: string | null;
+  district: string | null;
   status: ClientStatus;
   metadata: Record<string, unknown>;
   createdAt: Date;
@@ -24,6 +34,8 @@ export interface CreateClientInput {
   displayName: string;
   legalName?: string;
   externalRef?: string;
+  province?: string;
+  district?: string;
   metadata?: Record<string, unknown>;
   actorUserId: string;
 }
@@ -31,6 +43,7 @@ export interface CreateClientInput {
 export interface ListClientsInput {
   organizationId: string;
   pagination: PaginationParams;
+  province?: string;
   search?: string;
   status?: ClientStatus;
   workspaceId: string;
@@ -41,6 +54,8 @@ export interface UpdateClientInput {
   displayName?: string;
   legalName?: string;
   externalRef?: string;
+  province?: string;
+  district?: string;
   metadata?: Record<string, unknown>;
   status?: ClientStatus;
   actorUserId: string;

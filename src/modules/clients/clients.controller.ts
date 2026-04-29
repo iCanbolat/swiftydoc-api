@@ -31,6 +31,7 @@ import {
   ClientListResponseDto,
   ClientResponseDto,
 } from './dto/client-response.dto';
+import { GetClientQueryDto } from './dto/get-client-query.dto';
 import { ListClientsQueryDto } from './dto/list-clients-query.dto';
 import { UpdateClientDto } from './dto/update-client.dto';
 
@@ -63,6 +64,7 @@ export class ClientsController {
     const result = await this.clientsService.listClients({
       organizationId: actor.organization.id,
       pagination: resolvePagination(query),
+      province: query.province,
       search: query.search,
       status: query.status,
       workspaceId: query.workspaceId,
@@ -101,6 +103,8 @@ export class ClientsController {
       displayName: body.displayName,
       legalName: body.legalName,
       externalRef: body.externalRef,
+      province: body.province,
+      district: body.district,
       metadata: body.metadata,
       actorUserId: actor.user.id,
     });
@@ -112,6 +116,7 @@ export class ClientsController {
 
   @ApiOperation({ summary: 'Get a client by id.' })
   @ApiOkResponse({ type: ClientResponseDto })
+  @ApiBadRequestResponse({ description: 'DTO validation failed.' })
   @ApiNotFoundResponse({ description: 'Client not found.' })
   @ApiUnauthorizedResponse({
     description: 'Bearer token is missing or invalid.',
@@ -124,18 +129,22 @@ export class ClientsController {
   async getClient(
     @CurrentActor() actor: AuthenticatedInternalActor,
     @Param('id') clientId: string,
+    @Query() query: GetClientQueryDto,
   ) {
-    const client = await this.clientsService.getClient(
+    const client = await this.clientsService.getClientResponse(
       clientId,
       actor.organization.id,
+      query.include,
     );
 
     return {
-      data: this.clientsService.serializeClient(client),
+      data: client,
     };
   }
 
-  @ApiOperation({ summary: 'Update client metadata and status.' })
+  @ApiOperation({
+    summary: 'Update client identity, location, metadata and status.',
+  })
   @ApiOkResponse({ type: ClientResponseDto })
   @ApiBadRequestResponse({ description: 'DTO validation failed.' })
   @ApiNotFoundResponse({ description: 'Client not found.' })
@@ -157,6 +166,8 @@ export class ClientsController {
       displayName: body.displayName,
       legalName: body.legalName,
       externalRef: body.externalRef,
+      province: body.province,
+      district: body.district,
       metadata: body.metadata,
       status: body.status,
       actorUserId: actor.user.id,

@@ -7,10 +7,14 @@ import {
   ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { AUDIT_ACTIONS } from '../../common/audit/audit-actions';
 import type { AuditChannel } from '../../common/audit/audit-channel';
+import {
+  type PaginatedResult,
+  paginateResult,
+} from '../../common/http/pagination.dto';
 import { RESOURCE_TYPES } from '../../common/audit/resource-types';
 import { type PortalLinkStatus } from '../../common/portal/portal-link-types';
 import { type ReminderChannel } from '../../common/reminders/reminder-types';
@@ -34,6 +38,8 @@ import {
   submissionItems,
   submissions,
   templateFields,
+  templates,
+  users,
 } from '../../infrastructure/database/schema';
 import { WebhookService } from '../../infrastructure/webhooks/webhook.service';
 import {
@@ -49,12 +55,39 @@ import type {
   CreatePortalLinkInput,
   CreateRequestInput,
   CreateSubmissionItemCommentInput,
+  ListRequestsInput,
+  RequestReadModel,
   ReviewDecisionType,
   ReviewSubmissionItemInput,
   SendRequestReminderInput,
   TransitionRequestInput,
   VerifyPortalLinkInput,
 } from './request-workflow.types';
+
+type RequestReadModelRow = {
+  id: string;
+  organizationId: string;
+  workspaceId: string;
+  clientId: string;
+  templateId: string;
+  templateVersionId: string;
+  requestCode: string;
+  title: string;
+  message: string | null;
+  status: RequestStatus;
+  dueAt: Date | null;
+  sentAt: Date | null;
+  closedAt: Date | null;
+  templateName: string;
+  recipientCount: number | string | null;
+  completedItems: number | string | null;
+  totalItems: number | string | null;
+  ownerUserId: string | null;
+  ownerUserFullName: string | null;
+  ownerUserEmail: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
 
 @Injectable()
 export class RequestWorkflowService {
@@ -65,6 +98,158 @@ export class RequestWorkflowService {
     private readonly remindersService: RemindersService,
     private readonly webhookService: WebhookService,
   ) {}
+
+  async listRequests(
+    input: ListRequestsInput,
+  ): Promise<PaginatedResult<RequestReadModel>> {
+    const db = this.getDatabase();
+    const conditions = [
+      eq(requests.organizationId, input.organizationId),
+      eq(requests.workspaceId, input.workspaceId),
+    ];
+
+    const clientId = this.normalizeOptionalString(input.clientId);
+
+    if (clientId) {
+      conditions.push(eq(requests.clientId, clientId));
+    }
+
+    if (input.status) {
+      conditions.push(eq(requests.status, input.status));
+    }
+
+    const requestSubmissionAggregates = db
+      .select({
+        requestId: submissions.requestId,
+        recipientCount: sql<number>`count(distinct ${submissions.id})`,
+        completedItems: sql<number>`count(case when ${submissionItems.status} in ('provided', 'approved') then 1 end)`,
+        totalItems: sql<number>`count(${submissionItems.id})`,
+      })
+      .from(submissions)
+      .leftJoin(
+        submissionItems,
+        eq(submissionItems.submissionId, submissions.id),
+      )
+      .groupBy(submissions.requestId)
+      .as('request_submission_aggregates');
+
+    const [countRows, rows] = await Promise.all([
+      db
+        .select({ count: sql<number>`count(*)` })
+        .from(requests)
+        .where(and(...conditions)),
+      db
+        .select({
+          id: requests.id,
+          organizationId: requests.organizationId,
+          workspaceId: requests.workspaceId,
+          clientId: requests.clientId,
+          templateId: requests.templateId,
+          templateVersionId: requests.templateVersionId,
+          requestCode: requests.requestCode,
+          title: requests.title,
+          message: requests.message,
+          status: requests.status,
+          dueAt: requests.dueAt,
+          sentAt: requests.sentAt,
+          closedAt: requests.closedAt,
+          templateName: templates.name,
+          recipientCount: sql<number>`coalesce(${requestSubmissionAggregates.recipientCount}, 0)`,
+          completedItems: sql<number>`coalesce(${requestSubmissionAggregates.completedItems}, 0)`,
+          totalItems: sql<number>`coalesce(${requestSubmissionAggregates.totalItems}, 0)`,
+          ownerUserId: users.id,
+          ownerUserFullName: users.fullName,
+          ownerUserEmail: users.email,
+          createdAt: requests.createdAt,
+          updatedAt: requests.updatedAt,
+        })
+        .from(requests)
+        .innerJoin(templates, eq(templates.id, requests.templateId))
+        .leftJoin(users, eq(users.id, requests.createdByUserId))
+        .leftJoin(
+          requestSubmissionAggregates,
+          eq(requestSubmissionAggregates.requestId, requests.id),
+        )
+        .where(and(...conditions))
+        .orderBy(desc(requests.updatedAt), desc(requests.id))
+        .limit(input.pagination.pageSize)
+        .offset(input.pagination.offset),
+    ]);
+
+    return paginateResult(
+      rows.map((row) => this.serializeRequestReadModel(row)),
+      countRows[0]?.count ?? 0,
+      input.pagination,
+    );
+  }
+
+  async getRequest(
+    requestId: string,
+    organizationId: string,
+  ): Promise<RequestReadModel> {
+    const db = this.getDatabase();
+
+    const requestSubmissionAggregates = db
+      .select({
+        requestId: submissions.requestId,
+        recipientCount: sql<number>`count(distinct ${submissions.id})`,
+        completedItems: sql<number>`count(case when ${submissionItems.status} in ('provided', 'approved') then 1 end)`,
+        totalItems: sql<number>`count(${submissionItems.id})`,
+      })
+      .from(submissions)
+      .leftJoin(
+        submissionItems,
+        eq(submissionItems.submissionId, submissions.id),
+      )
+      .groupBy(submissions.requestId)
+      .as('request_submission_aggregates');
+
+    const [requestRow] = await db
+      .select({
+        id: requests.id,
+        organizationId: requests.organizationId,
+        workspaceId: requests.workspaceId,
+        clientId: requests.clientId,
+        templateId: requests.templateId,
+        templateVersionId: requests.templateVersionId,
+        requestCode: requests.requestCode,
+        title: requests.title,
+        message: requests.message,
+        status: requests.status,
+        dueAt: requests.dueAt,
+        sentAt: requests.sentAt,
+        closedAt: requests.closedAt,
+        templateName: templates.name,
+        recipientCount: sql<number>`coalesce(${requestSubmissionAggregates.recipientCount}, 0)`,
+        completedItems: sql<number>`coalesce(${requestSubmissionAggregates.completedItems}, 0)`,
+        totalItems: sql<number>`coalesce(${requestSubmissionAggregates.totalItems}, 0)`,
+        ownerUserId: users.id,
+        ownerUserFullName: users.fullName,
+        ownerUserEmail: users.email,
+        createdAt: requests.createdAt,
+        updatedAt: requests.updatedAt,
+      })
+      .from(requests)
+      .innerJoin(templates, eq(templates.id, requests.templateId))
+      .leftJoin(users, eq(users.id, requests.createdByUserId))
+      .leftJoin(
+        requestSubmissionAggregates,
+        eq(requestSubmissionAggregates.requestId, requests.id),
+      )
+      .where(
+        and(
+          eq(requests.id, requestId),
+          eq(requests.organizationId, organizationId),
+        ),
+      )
+      .limit(1);
+
+    if (!requestRow) {
+      throw new NotFoundException('Request not found.');
+    }
+
+    return this.serializeRequestReadModel(requestRow);
+  }
 
   async createRequest(input: CreateRequestInput) {
     await this.organizationEntitlementsService.assertWithinLimit(
@@ -1206,6 +1391,51 @@ export class RequestWorkflowService {
         organizationId,
       );
     }
+  }
+
+  private serializeRequestReadModel(
+    row: RequestReadModelRow,
+  ): RequestReadModel {
+    return {
+      id: row.id,
+      organizationId: row.organizationId,
+      workspaceId: row.workspaceId,
+      clientId: row.clientId,
+      templateId: row.templateId,
+      templateVersionId: row.templateVersionId,
+      requestCode: row.requestCode,
+      title: row.title,
+      message: row.message,
+      status: row.status,
+      dueAt: row.dueAt?.toISOString() ?? null,
+      sentAt: row.sentAt?.toISOString() ?? null,
+      closedAt: row.closedAt?.toISOString() ?? null,
+      templateName: row.templateName,
+      recipientCount: Number(row.recipientCount ?? 0),
+      completedItems: Number(row.completedItems ?? 0),
+      totalItems: Number(row.totalItems ?? 0),
+      ownerUser:
+        row.ownerUserId && row.ownerUserFullName && row.ownerUserEmail
+          ? {
+              id: row.ownerUserId,
+              fullName: row.ownerUserFullName,
+              email: row.ownerUserEmail,
+            }
+          : null,
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+    };
+  }
+
+  private normalizeOptionalString(
+    value: string | undefined,
+  ): string | undefined {
+    if (typeof value !== 'string') {
+      return undefined;
+    }
+
+    const normalized = value.trim();
+    return normalized.length > 0 ? normalized : undefined;
   }
 
   private getDatabase() {

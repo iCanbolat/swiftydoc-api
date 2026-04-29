@@ -16,5 +16,6 @@ import { SubmissionsController } from './submissions.controller';
     ReviewsController,
   ],
   providers: [RequestWorkflowService],
+  exports: [RequestWorkflowService],
 })
 export class RequestsModule {}

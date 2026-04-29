@@ -92,6 +92,13 @@
       "when": 1776979200000,
       "tag": "0012_sharp_stiltman",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1777409247213,
+      "tag": "0013_client_location_fields",
+      "breakpoints": true
     }
   ]
 }
